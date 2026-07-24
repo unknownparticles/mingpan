@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { getBazi } from '../lib/bazi';
-import { loadAIConfig, SYSTEM_PROMPT_BAZI, hasAIKey } from '../lib/aiInterpret';
+import { loadAIConfig, SYSTEM_PROMPT_BAZI, canUseAI, getAIGateMessage } from '../lib/aiInterpret';
 import { callLLMWithCache } from '../lib/cache';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -93,8 +93,8 @@ export default function BaziChart({ date, shiChenIndex, gender }: Props) {
 
   async function askAI() {
     const config = loadAIConfig();
-    if (!config.enabled || !hasAIKey(config)) {
-      setAiText(['⚠️ 请先在「设」中配置 API Key 后启用 AI 解读。']);
+    if (!canUseAI(config)) {
+      setAiText([getAIGateMessage(config)]);
       return;
     }
     setAiLoading(true);

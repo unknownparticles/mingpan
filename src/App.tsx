@@ -21,6 +21,7 @@ import {
   getStoredUser,
   type AuthUser,
 } from './lib/auth';
+import { applyLoginAIDefaults } from './lib/aiInterpret';
 
 type Tab = 'ziwei' | 'qimen' | 'bazi' | 'overall' | 'tools' | 'form' | 'home' | 'divination' | 'settings';
 
@@ -53,6 +54,7 @@ export default function App() {
       try {
         await consumeAuthCallbackToken();
         const me = await fetchMe();
+        if (me?.user) applyLoginAIDefaults();
         if (!cancelled) setAuthUser(me?.user || getStoredUser());
       } catch {
         if (!cancelled) setAuthUser(getStoredUser());

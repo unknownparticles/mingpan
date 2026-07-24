@@ -1,5 +1,9 @@
-// AI 解读 — 参考 one_min_ceo 的 SiliconFlow / 多厂商接入方式
-// 兼容 OpenAI Chat Completions；Key 优先本地设置，其次 runtime-config / 环境变量
+// AI 解读
+// 1) 平台模式：登录后走 CF AI（ai.alunapi.top，复用登录令牌）
+// 2) 自备 Key：未登录或自选厂商，直连 OpenAI 兼容 API
+
+import { isLoggedIn } from './auth';
+import { callCfAiChat, getAiBaseUrl } from './cfAi';
 
 const STORAGE_KEY = 'mingpan:ai-config';
 
@@ -13,6 +17,9 @@ export type AIProvider =
   | 'ollama'
   | 'custom';
 
+/** platform=登录后走 CF AI；byok=自备 API Key 直连 */
+export type AIAccessMode = 'platform' | 'byok';
+
 export interface AIConfig {
   baseUrl: string;
   apiKey: string;
@@ -21,6 +28,10 @@ export interface AIConfig {
   provider: AIProvider;
   /** DeepSeek 系模型可选开启思考链（SiliconFlow / DeepSeek 官方） */
   enableThinking: boolean;
+  /** 访问模式：平台 AI / 自备 Key */
+  accessMode: AIAccessMode;
+  /** 平台模型 id（如 @cf/meta/llama-3.2-3b-instruct） */
+  platformModel: string;
 }
 
 export interface CallLLMOptions {
@@ -40,6 +51,7 @@ export interface ConnectionTestResult {
 type RuntimeConfig = MingpanRuntimeConfig;
 
 export const DEFAULT_SILICONFLOW_MODEL = 'Qwen/Qwen2.5-14B-Instruct';
+export const DEFAULT_PLATFORM_MODEL = '@cf/meta/llama-3.2-3b-instruct';
 export const DEFAULT_MAX_TOKENS = 2200;
 
 export const LLM_PRESETS: Record<
@@ -187,11 +199,24 @@ function normalizeConfig(raw: Partial<AIConfig> | null | undefined): AIConfig {
         ? !!runtime().enableThinking
         : env('VITE_AI_ENABLE_THINKING') === 'true';
 
-  // 有 Key（或 Ollama 本地）时默认启用
+  const loggedIn = isLoggedIn();
+  const accessMode: AIAccessMode =
+    raw?.accessMode === 'platform' || raw?.accessMode === 'byok'
+      ? raw.accessMode
+      : loggedIn
+        ? 'platform'
+        : 'byok';
+
+  const platformModel =
+    pickKey(raw?.platformModel, (runtime() as any).aiDefaultModel) || DEFAULT_PLATFORM_MODEL;
+
+  // 登录默认开 AI；未登录仅在有 Key / Ollama 时默认开
   const enabled =
     typeof raw?.enabled === 'boolean'
       ? raw.enabled
-      : !!(apiKey || provider === 'ollama');
+      : accessMode === 'platform' && loggedIn
+        ? true
+        : !!(apiKey || provider === 'ollama');
 
   return {
     provider,
@@ -200,6 +225,8 @@ function normalizeConfig(raw: Partial<AIConfig> | null | undefined): AIConfig {
     model,
     enabled,
     enableThinking,
+    accessMode,
+    platformModel,
   };
 }
 
@@ -245,6 +272,70 @@ export function hasAIKey(config?: AIConfig): boolean {
   return !!c.apiKey?.trim();
 }
 
+export function usesPlatformAI(config?: AIConfig): boolean {
+  const c = config || loadAIConfig();
+  return c.accessMode === 'platform';
+}
+
+/** 当前配置是否可发起 AI 调用 */
+export function canUseAI(config?: AIConfig): boolean {
+  const c = config || loadAIConfig();
+  if (!c.enabled) return false;
+  if (c.accessMode === 'platform') return isLoggedIn();
+  return hasAIKey(c);
+}
+
+export function getAIGateMessage(config?: AIConfig): string {
+  const c = config || loadAIConfig();
+  if (!c.enabled) {
+    return isLoggedIn()
+      ? '⚠️ AI 未启用，请到「设」中开启 AI 解读。'
+      : '⚠️ 未登录时需在「设」中填写 API Key 并启用 AI 解读。';
+  }
+  if (c.accessMode === 'platform' && !isLoggedIn()) {
+    return '⚠️ 平台 AI 需先登录；也可在「设」切换为自备 API Key。';
+  }
+  if (c.accessMode !== 'platform' && !hasAIKey(c)) {
+    return '⚠️ 请先在「设」中配置 API Key 后启用 AI 解读。';
+  }
+  return '⚠️ AI 暂不可用，请检查设置。';
+}
+
+/** 登录成功后：默认开启平台 AI
+ * force=true：主动登录/注册时调用
+ * force=false：会话恢复时仅在当前不可用时补齐
+ */
+export function applyLoginAIDefaults(opts?: { force?: boolean }) {
+  const c = loadAIConfig();
+  const force = !!opts?.force;
+
+  if (!force) {
+    if (canUseAI(c)) return;
+  } else if (c.accessMode === 'byok' && hasAIKey(c)) {
+    // 用户明确自备 Key：只确保开启，不抢通道
+    if (!c.enabled) saveAIConfig({ ...c, enabled: true });
+    return;
+  }
+
+  saveAIConfig({
+    ...c,
+    enabled: true,
+    accessMode: 'platform',
+    platformModel: c.platformModel || DEFAULT_PLATFORM_MODEL,
+  });
+}
+
+/** 退出登录后：若无自备 Key 则关闭 AI，并切回 byok */
+export function applyLogoutAIDefaults() {
+  const c = loadAIConfig();
+  const keepByok = hasAIKey(c);
+  saveAIConfig({
+    ...c,
+    accessMode: 'byok',
+    enabled: keepByok ? c.enabled : false,
+  });
+}
+
 export function getProviderDisplayName(provider: AIProvider): string {
   return LLM_PRESETS[provider]?.label || provider;
 }
@@ -280,8 +371,33 @@ function extractContent(data: any): string {
   return '';
 }
 
-/** 通用 OpenAI 兼容 chat 调用（参考 one_min_ceo） */
-export async function callLLM(
+async function callPlatformLLM(
+  config: AIConfig,
+  messages: { role: string; content: string }[],
+  systemPrompt?: string,
+  options: CallLLMOptions = {},
+): Promise<string> {
+  if (!isLoggedIn()) {
+    throw new Error('平台 AI 需要登录。未登录请在「设」中填写自备 API Key。');
+  }
+  const model = (config.platformModel || config.model || DEFAULT_PLATFORM_MODEL).trim();
+  if (!model) throw new Error('未选择平台模型，请到「设」中选择。');
+
+  const result = await callCfAiChat({
+    model,
+    messages,
+    system: systemPrompt,
+    temperature: options.temperature ?? 0.7,
+    maxTokens: options.maxTokens ?? DEFAULT_MAX_TOKENS,
+    signal: options.signal,
+  });
+  const text = result.message?.content?.trim() || '';
+  if (!text) throw new Error('平台 AI 返回空内容，请稍后重试或更换模型。');
+  return text;
+}
+
+/** 自备 Key：OpenAI 兼容 chat 调用 */
+async function callByokLLM(
   config: AIConfig,
   messages: { role: string; content: string }[],
   systemPrompt?: string,
@@ -358,6 +474,20 @@ export async function callLLM(
   return text;
 }
 
+/** 统一入口：平台 AI 或自备 Key */
+export async function callLLM(
+  config: AIConfig,
+  messages: { role: string; content: string }[],
+  systemPrompt?: string,
+  options: CallLLMOptions = {},
+): Promise<string> {
+  const c = normalizeConfig(config);
+  if (c.accessMode === 'platform') {
+    return callPlatformLLM(c, messages, systemPrompt, options);
+  }
+  return callByokLLM(c, messages, systemPrompt, options);
+}
+
 export async function testApiConnection(config?: AIConfig): Promise<ConnectionTestResult> {
   const c = config || loadAIConfig();
   const start = performance.now();
@@ -376,9 +506,11 @@ export async function testApiConnection(config?: AIConfig): Promise<ConnectionTe
         latency,
       };
     }
+    const modeLabel =
+      c.accessMode === 'platform' ? `平台AI(${getAiBaseUrl()})` : getProviderDisplayName(c.provider);
     return {
       success: true,
-      message: `连接成功！延迟 ${latency.toFixed(0)} ms`,
+      message: `连接成功（${modeLabel}）！延迟 ${latency.toFixed(0)} ms`,
       latency,
     };
   } catch (e: any) {

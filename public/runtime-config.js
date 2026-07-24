@@ -7,5 +7,7 @@ window.__MINGPAN_CONFIG__ = window.__MINGPAN_CONFIG__ || {
   enableThinking: false,
   authBaseUrl: 'https://login.alunapi.top',
   loginBaseUrl: 'https://login.alunapi.top',
-  registerBaseUrl: 'https://register.alunapi.top'
+  registerBaseUrl: 'https://register.alunapi.top',
+  aiBaseUrl: 'https://ai.alunapi.top',
+  aiDefaultModel: '@cf/meta/llama-3.2-3b-instruct'
 };

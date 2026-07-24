@@ -64,6 +64,18 @@ window.__MINGPAN_CONFIG__ = {
 注意：静态站点部署时密钥会对页面访问者可见，建议使用短期、低额度 Key，或改为后端代理。
 
 
+
+## 平台 AI（CF AI）
+
+接入 [ai.alunapi.top](https://ai.alunapi.top)（源码见登录仓库 `ai/` 模块）：
+
+- **已登录**：默认开启 AI，使用平台模型（Workers AI / 硅基流动），Bearer Token 鉴权
+- **未登录**：必须在设置页填写自备 API Key 后才可启用 AI
+
+```bash
+VITE_AI_SERVICE_BASE_URL=https://ai.alunapi.top
+```
+
 ## 账号登录（CF Auth）
 
 接入独立登录服务 [login.alunapi.top](https://login.alunapi.top) / [register.alunapi.top](https://register.alunapi.top)。

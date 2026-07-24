@@ -7,7 +7,7 @@ import { applyZiweiSchool, SCHOOL_NAMES, type ZiweiSchool } from '../lib/ziweiSc
 import { buildQimen } from '../lib/qimen';
 import { getBazi } from '../lib/bazi';
 import { getDateInfo } from '../lib/lunar';
-import { loadAIConfig, hasAIKey } from '../lib/aiInterpret';
+import { loadAIConfig, canUseAI, getAIGateMessage } from '../lib/aiInterpret';
 import { callLLMWithCache, listRecentCache, deleteCache } from '../lib/cache';
 import QueryLoader from './QueryLoader';
 
@@ -208,10 +208,10 @@ ${userQ ? `[350字以内：直接回答用户问题，要给具体年份/时间�
 
   async function runAnalysis(userQ?: string) {
     const config = loadAIConfig();
-    if (!config.enabled || !hasAIKey(config)) {
+    if (!canUseAI(config)) {
       setAnalysis([{
         id: 'err', type: 'stage', title: '配置缺失',
-        body: '⚠️ 请先在「设」中配置 API Key 后启用 AI 解读。', stageName: '错误',
+        body: getAIGateMessage(config), stageName: '错误',
       }]);
       return;
     }

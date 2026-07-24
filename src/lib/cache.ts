@@ -121,8 +121,8 @@ export async function callLLMWithCache(
     question,
     mode,
     answer: text,
-    provider: config.provider,
-    model: config.model,
+    provider: config.accessMode === 'platform' ? 'platform' : config.provider,
+    model: config.accessMode === 'platform' ? (config.platformModel || config.model) : config.model,
   });
   return { text, cached: false, cacheKey };
 }

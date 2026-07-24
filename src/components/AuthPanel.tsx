@@ -12,6 +12,7 @@ import {
   type AuthPublicConfig,
   type AuthUser,
 } from '../lib/auth';
+import { applyLoginAIDefaults, applyLogoutAIDefaults } from '../lib/aiInterpret';
 
 type Mode = 'login' | 'register';
 
@@ -52,6 +53,7 @@ export default function AuthPanel({ onAuthChange }: Props) {
       if (isLoggedIn()) {
         try {
           const me = await fetchMe();
+          if (me?.user) applyLoginAIDefaults();
           if (!cancelled) setUser(me?.user || null);
         } catch (e: any) {
           if (!cancelled) setError(e?.message || '会话校验失败');
@@ -69,8 +71,9 @@ export default function AuthPanel({ onAuthChange }: Props) {
     setMessage('');
     try {
       const session = await loginWithPassword(account.trim(), password);
+      applyLoginAIDefaults({ force: true });
       setUser(session.user);
-      setMessage('登录成功');
+      setMessage('登录成功，已默认开启平台 AI');
       setPassword('');
     } catch (err: any) {
       setError(err?.message || '登录失败');
@@ -91,8 +94,9 @@ export default function AuthPanel({ onAuthChange }: Props) {
         password,
         registerCode: registerCode.trim() || undefined,
       });
+      applyLoginAIDefaults({ force: true });
       setUser(session.user);
-      setMessage('注册成功');
+      setMessage('注册成功，已默认开启平台 AI');
       setPassword('');
     } catch (err: any) {
       setError(err?.message || '注册失败');
@@ -106,6 +110,7 @@ export default function AuthPanel({ onAuthChange }: Props) {
     setError('');
     try {
       await logout();
+      applyLogoutAIDefaults();
       setUser(null);
       setMessage('已退出登录');
     } catch (err: any) {

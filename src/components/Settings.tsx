@@ -1,13 +1,17 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import AuthPanel from './AuthPanel';
 import {
   loadAIConfig,
   saveAIConfig,
   LLM_PRESETS,
   testApiConnection,
+  canUseAI,
   type AIConfig,
   type AIProvider,
+  type AIAccessMode,
 } from '../lib/aiInterpret';
+import { isLoggedIn } from '../lib/auth';
+import { fetchCfAiConfig, fetchCfAiMe, getAiBaseUrl, type CfAiModel, type CfAiMe } from '../lib/cfAi';
 
 interface Props {
   onClose: () => void;
@@ -19,10 +23,59 @@ export default function Settings({ onClose, onAuthChange }: Props) {
   const [saved, setSaved] = useState(false);
   const [testing, setTesting] = useState(false);
   const [testResult, setTestResult] = useState('');
+  const [loggedIn, setLoggedIn] = useState(isLoggedIn());
+  const [platformModels, setPlatformModels] = useState<CfAiModel[]>([]);
+  const [platformDefault, setPlatformDefault] = useState('');
+  const [platformMe, setPlatformMe] = useState<CfAiMe | null>(null);
+  const [platformHint, setPlatformHint] = useState('');
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const cfg = await fetchCfAiConfig();
+        if (cancelled) return;
+        setPlatformModels(cfg.models || []);
+        setPlatformDefault(cfg.defaultModel || '');
+        setPlatformHint(
+          cfg.authenticated
+            ? `平台已鉴权 · 日限 ${cfg.dailyLimit || '不限'}`
+            : '未登录：平台模型需登录后可用',
+        );
+        if (!config.platformModel && cfg.defaultModel) {
+          setConfig(prev => ({ ...prev, platformModel: cfg.defaultModel }));
+        }
+      } catch (e: any) {
+        if (!cancelled) setPlatformHint(e?.message || '无法连接平台 AI');
+      }
+
+      if (isLoggedIn()) {
+        try {
+          const me = await fetchCfAiMe();
+          if (!cancelled) setPlatformMe(me);
+        } catch {
+          if (!cancelled) setPlatformMe(null);
+        }
+      }
+    })();
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loggedIn]);
 
   function update<K extends keyof AIConfig>(k: K, v: AIConfig[K]) {
     setConfig(prev => ({ ...prev, [k]: v }));
     setSaved(false);
+  }
+
+  function setAccessMode(mode: AIAccessMode) {
+    setConfig(prev => ({
+      ...prev,
+      accessMode: mode,
+      // 切到平台且已登录时默认开启
+      enabled: mode === 'platform' && loggedIn ? true : prev.enabled,
+    }));
+    setSaved(false);
+    setTestResult('');
   }
 
   function selectProvider(key: AIProvider) {
@@ -30,7 +83,6 @@ export default function Settings({ onClose, onAuthChange }: Props) {
     setConfig(prev => ({
       ...prev,
       provider: key,
-      // 切厂商时用预设填入；用户已填 Key 时保留
       baseUrl: preset.baseUrl || prev.baseUrl,
       model: preset.model || prev.model,
       apiKey: prev.provider === key ? prev.apiKey : (prev.apiKey || ''),
@@ -60,6 +112,8 @@ export default function Settings({ onClose, onAuthChange }: Props) {
 
   const currentHint = LLM_PRESETS[config.provider]?.hint || '';
   const needsKey = config.provider !== 'ollama';
+  const isPlatform = config.accessMode === 'platform';
+  const availablePlatform = platformModels.filter(m => m.available !== false);
 
   return (
     <div className="p-4 max-w-lg mx-auto">
@@ -74,13 +128,19 @@ export default function Settings({ onClose, onAuthChange }: Props) {
             <h3 className="text-sm text-gold-bright title-display tracking-widest">账 号</h3>
             <span className="text-[10px] text-gold/40">CF Auth · alunapi.top</span>
           </div>
-          <AuthPanel onAuthChange={onAuthChange} />
+          <AuthPanel
+            onAuthChange={(u) => {
+              setLoggedIn(!!u);
+              onAuthChange?.(u);
+              setConfig(loadAIConfig());
+            }}
+          />
         </section>
 
         <div className="text-xs text-gold opacity-60 leading-relaxed">
-          启用 AI 解读需配置 LLM API（兼容 OpenAI Chat Completions）。
-          默认推荐 <b>SiliconFlow 硅基流动</b>（与 one_min_ceo 同款接入）。
-          Key 仅存在本地浏览器，也可通过 <code>.env</code> / <code>runtime-config.js</code> 注入。
+          AI 解读支持两种方式：
+          <b>登录后默认走平台 AI</b>（{getAiBaseUrl()}，无需自备 Key）；
+          <b>未登录需自备 API Key</b> 才可开启。
         </div>
 
         <div className="flex items-center justify-between">
@@ -93,77 +153,141 @@ export default function Settings({ onClose, onAuthChange }: Props) {
           </button>
         </div>
 
-        <div className="flex items-center justify-between">
-          <div>
-            <span className="text-rice text-sm">思考模式</span>
-            <div className="text-[10px] text-gold opacity-50 mt-0.5">DeepSeek / R1 类模型生效</div>
-          </div>
-          <button
-            className={`text-sm px-3 py-1 rounded ${config.enableThinking ? 'btn-vermilion' : 'btn-ghost'}`}
-            onClick={() => update('enableThinking', !config.enableThinking)}
-          >
-            {config.enableThinking ? '开启' : '关闭'}
-          </button>
-        </div>
-
         <div>
-          <label className="block text-xs text-gold opacity-70 mb-2">LLM 厂商</label>
+          <label className="block text-xs text-gold opacity-70 mb-2">AI 通道</label>
           <div className="flex flex-wrap gap-2">
-            {(Object.keys(LLM_PRESETS) as AIProvider[]).map(key => {
-              const preset = LLM_PRESETS[key];
-              return (
-                <button
-                  key={key}
-                  className={`text-xs px-2.5 py-1 rounded ${
-                    config.provider === key ? 'btn-vermilion' : 'btn-ghost'
-                  }`}
-                  onClick={() => selectProvider(key)}
-                >
-                  {preset.label}
-                </button>
-              );
-            })}
+            <button
+              className={`text-xs px-2.5 py-1 rounded ${isPlatform ? 'btn-vermilion' : 'btn-ghost'}`}
+              onClick={() => setAccessMode('platform')}
+              disabled={!loggedIn}
+              title={loggedIn ? '使用登录态调用平台 AI' : '需先登录'}
+            >
+              平台 AI{loggedIn ? '' : '（需登录）'}
+            </button>
+            <button
+              className={`text-xs px-2.5 py-1 rounded ${!isPlatform ? 'btn-vermilion' : 'btn-ghost'}`}
+              onClick={() => setAccessMode('byok')}
+            >
+              自备 API Key
+            </button>
           </div>
-          {currentHint && (
-            <div className="mt-2 text-[10px] text-gold opacity-50">{currentHint}</div>
+          <div className="mt-2 text-[10px] text-gold opacity-50">
+            {isPlatform
+              ? (platformHint || '登录后使用 Cloudflare / 硅基流动平台额度')
+              : '未登录或想用自己的 Key 时选择此项'}
+          </div>
+          {platformMe && isPlatform && (
+            <div className="mt-2 text-[10px] text-gold/60">
+              今日调用 {platformMe.usage?.dailyUsed ?? 0}
+              {platformMe.usage?.dailyLimit ? ` / ${platformMe.usage.dailyLimit}` : ''}
+              {' · '}积分 {platformMe.user?.points ?? 0}
+              {' · '}{platformMe.user?.membership?.name || '会员'}
+            </div>
           )}
         </div>
 
-        <div>
-          <label className="block text-xs text-gold opacity-70 mb-1">Base URL</label>
-          <input
-            className="w-full bg-transparent border-b border-gold/30 text-rice py-1 px-1 focus:outline-none focus:border-gold-bright text-sm"
-            value={config.baseUrl}
-            onChange={e => update('baseUrl', e.target.value)}
-            placeholder="https://api.siliconflow.cn/v1"
-          />
-        </div>
+        {isPlatform ? (
+          <div className="space-y-3">
+            <div>
+              <label className="block text-xs text-gold opacity-70 mb-1">平台模型</label>
+              <select
+                className="w-full bg-ink-soft/60 border border-gold/30 text-rice py-2 px-2 rounded text-sm focus:outline-none focus:border-gold-bright"
+                value={config.platformModel || platformDefault}
+                onChange={e => update('platformModel', e.target.value)}
+              >
+                {(availablePlatform.length ? availablePlatform : platformModels).map(m => (
+                  <option key={m.id} value={m.id} disabled={m.available === false}>
+                    {m.name} · {m.provider} · 消耗{m.cost}
+                    {m.available === false ? '（不可用）' : ''}
+                  </option>
+                ))}
+              </select>
+              <div className="mt-1 text-[10px] text-gold/40">
+                {platformModels.find(m => m.id === (config.platformModel || platformDefault))?.description || ''}
+              </div>
+            </div>
+          </div>
+        ) : (
+          <>
+            <div className="flex items-center justify-between">
+              <div>
+                <span className="text-rice text-sm">思考模式</span>
+                <div className="text-[10px] text-gold opacity-50 mt-0.5">DeepSeek / R1 类模型生效</div>
+              </div>
+              <button
+                className={`text-sm px-3 py-1 rounded ${config.enableThinking ? 'btn-vermilion' : 'btn-ghost'}`}
+                onClick={() => update('enableThinking', !config.enableThinking)}
+              >
+                {config.enableThinking ? '开启' : '关闭'}
+              </button>
+            </div>
 
-        <div>
-          <label className="block text-xs text-gold opacity-70 mb-1">API Key</label>
-          <input
-            type="password"
-            className="w-full bg-transparent border-b border-gold/30 text-rice py-1 px-1 focus:outline-none focus:border-gold-bright text-sm"
-            value={config.apiKey}
-            onChange={e => update('apiKey', e.target.value)}
-            placeholder={LLM_PRESETS[config.provider]?.placeholder || 'sk-...'}
-          />
-        </div>
+            <div>
+              <label className="block text-xs text-gold opacity-70 mb-2">LLM 厂商</label>
+              <div className="flex flex-wrap gap-2">
+                {(Object.keys(LLM_PRESETS) as AIProvider[]).map(key => {
+                  const preset = LLM_PRESETS[key];
+                  return (
+                    <button
+                      key={key}
+                      className={`text-xs px-2.5 py-1 rounded ${
+                        config.provider === key ? 'btn-vermilion' : 'btn-ghost'
+                      }`}
+                      onClick={() => selectProvider(key)}
+                    >
+                      {preset.label}
+                    </button>
+                  );
+                })}
+              </div>
+              {currentHint && (
+                <div className="mt-2 text-[10px] text-gold opacity-50">{currentHint}</div>
+              )}
+            </div>
 
-        <div>
-          <label className="block text-xs text-gold opacity-70 mb-1">Model</label>
-          <input
-            className="w-full bg-transparent border-b border-gold/30 text-rice py-1 px-1 focus:outline-none focus:border-gold-bright text-sm"
-            value={config.model}
-            onChange={e => update('model', e.target.value)}
-            placeholder="Qwen/Qwen2.5-14B-Instruct"
-          />
-        </div>
+            <div>
+              <label className="block text-xs text-gold opacity-70 mb-1">Base URL</label>
+              <input
+                className="w-full bg-transparent border-b border-gold/30 text-rice py-1 px-1 focus:outline-none focus:border-gold-bright text-sm"
+                value={config.baseUrl}
+                onChange={e => update('baseUrl', e.target.value)}
+                placeholder="https://api.siliconflow.cn/v1"
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs text-gold opacity-70 mb-1">API Key</label>
+              <input
+                type="password"
+                className="w-full bg-transparent border-b border-gold/30 text-rice py-1 px-1 focus:outline-none focus:border-gold-bright text-sm"
+                value={config.apiKey}
+                onChange={e => update('apiKey', e.target.value)}
+                placeholder={LLM_PRESETS[config.provider]?.placeholder || 'API Key'}
+              />
+              {!loggedIn && (
+                <div className="mt-1 text-[10px] text-vermilion/80">未登录必须填写 Key 才能启用 AI</div>
+              )}
+            </div>
+
+            <div>
+              <label className="block text-xs text-gold opacity-70 mb-1">Model</label>
+              <input
+                className="w-full bg-transparent border-b border-gold/30 text-rice py-1 px-1 focus:outline-none focus:border-gold-bright text-sm"
+                value={config.model}
+                onChange={e => update('model', e.target.value)}
+                placeholder="Qwen/Qwen2.5-14B-Instruct"
+              />
+            </div>
+          </>
+        )}
 
         <div>
           <button
             onClick={testConnection}
-            disabled={testing || !config.baseUrl || (needsKey && !config.apiKey)}
+            disabled={
+              testing ||
+              (isPlatform ? !loggedIn : (!config.baseUrl || (needsKey && !config.apiKey)))
+            }
             className="w-full btn-ghost py-2 rounded text-sm disabled:opacity-30"
           >
             {testing ? '测试中...' : '测试连接'}
@@ -171,14 +295,15 @@ export default function Settings({ onClose, onAuthChange }: Props) {
           {testResult && (
             <div className="mt-2 text-xs text-rice whitespace-pre-wrap">{testResult}</div>
           )}
+          <div className="mt-2 text-[10px] text-gold/40">
+            当前状态：{canUseAI(config) ? '可调用 AI' : '不可用（需登录或填写 Key）'}
+          </div>
         </div>
 
         <div className="text-[10px] text-gold opacity-50 leading-relaxed space-y-1.5 border-t border-gold/10 pt-3">
-          <div>· <b>SiliconFlow</b>：<b>cloud.siliconflow.cn</b> · 模型 <code>Qwen/Qwen2.5-14B-Instruct</code></div>
-          <div>· <b>DeepSeek</b>：<b>platform.deepseek.com</b> · 模型 <code>deepseek-chat</code></div>
-          <div>· <b>MiniMax</b>：<b>platform.minimaxi.com</b> · 模型 <code>MiniMax-M2.5</code></div>
-          <div>· <b>智谱 / 通义 / OpenAI / Ollama</b>：OpenAI 兼容协议均可</div>
-          <div>· 环境变量：<code>VITE_SILICONFLOW_API_KEY</code> 或 <code>VITE_AI_API_KEY</code></div>
+          <div>· <b>平台 AI</b>：{getAiBaseUrl()} · 登录令牌鉴权 · Workers AI / 硅基流动</div>
+          <div>· <b>自备 Key</b>：SiliconFlow / DeepSeek / MiniMax / 智谱 / 通义 / OpenAI / Ollama</div>
+          <div>· 环境变量：<code>VITE_AI_SERVICE_BASE_URL</code> / <code>VITE_SILICONFLOW_API_KEY</code></div>
         </div>
 
         <button onClick={save} className="btn-vermilion w-full py-3 rounded text-base font-bold tracking-widest title-display">

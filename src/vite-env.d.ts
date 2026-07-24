@@ -14,6 +14,7 @@ interface ImportMetaEnv {
   readonly VITE_AUTH_BASE_URL?: string;
   readonly VITE_LOGIN_BASE_URL?: string;
   readonly VITE_REGISTER_BASE_URL?: string;
+  readonly VITE_AI_SERVICE_BASE_URL?: string;
 }
 
 interface ImportMeta {
@@ -43,6 +44,8 @@ interface MingpanRuntimeConfig {
   authBaseUrl?: string;
   loginBaseUrl?: string;
   registerBaseUrl?: string;
+  aiBaseUrl?: string;
+  aiDefaultModel?: string;
 }
 
 interface Window {

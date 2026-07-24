@@ -2,7 +2,7 @@ import { useMemo, useState, useRef } from 'react';
 import { buildQimen, GONG_NAMES, QIMEN_METHOD_NAMES, type QimenMethod } from '../lib/qimen';
 import type { QimenResult, PalaceInfo } from '../lib/qimen';
 import { getDateInfo } from '../lib/lunar';
-import { loadAIConfig, SYSTEM_PROMPT_QIMEN, hasAIKey } from '../lib/aiInterpret';
+import { loadAIConfig, SYSTEM_PROMPT_QIMEN, canUseAI, getAIGateMessage } from '../lib/aiInterpret';
 import { callLLMWithCache } from '../lib/cache';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -97,8 +97,8 @@ export default function QimenChart({ date, shiChenIndex }: Props) {
 
   async function askAI() {
     const config = loadAIConfig();
-    if (!config.enabled || !hasAIKey(config)) {
-      setAiText(['⚠️ 请先在「设」中配置 API Key 后启用 AI 解读。']);
+    if (!canUseAI(config)) {
+      setAiText([getAIGateMessage(config)]);
       return;
     }
     setAiLoading(true);
