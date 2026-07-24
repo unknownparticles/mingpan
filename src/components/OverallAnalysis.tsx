@@ -268,7 +268,7 @@ ${userQ ? `[350字以内：直接回答用户问题，要给具体年份/时间�
     }
   }
 
-  function useSuggestedQuestion(text: string) {
+  function applySuggestedQuestion(text: string) {
     setMode('custom');
     setQuestion(text);
   }
@@ -484,7 +484,7 @@ ${userQ ? `[350字以内：直接回答用户问题，要给具体年份/时间�
               {SUGGESTED_QUESTIONS.map((q, i) => (
                 <button
                   key={i}
-                  onClick={() => useSuggestedQuestion(q.text)}
+                  onClick={() => applySuggestedQuestion(q.text)}
                   className="w-full text-left px-2 py-1.5 bg-ink-soft/40 hover:bg-gold/10 border border-gold/15 rounded text-xs text-rice transition"
                 >
                   <span className="mr-1">{q.icon}</span>{q.text}

@@ -63,3 +63,25 @@ window.__MINGPAN_CONFIG__ = {
 
 注意：静态站点部署时密钥会对页面访问者可见，建议使用短期、低额度 Key，或改为后端代理。
 
+## GitHub Pages 发布
+
+仓库已配置 GitHub Actions：`.github/workflows/pages.yml`。
+
+1. 在仓库 **Settings → Pages** 中将 Source 设为 **GitHub Actions**。
+2. 在 **Settings → Secrets and variables → Actions** 新增 secret：
+
+   ```text
+   SILICONFLOW_API_KEY
+   ```
+
+   可选变量 `SILICONFLOW_MODEL`（默认 `Qwen/Qwen2.5-14B-Instruct`）。
+
+3. 推送到 `master`/`main`，或手动运行工作流 **发布 GitHub Pages**。
+4. 默认访问地址：
+
+   ```text
+   https://unknownparticles.github.io/mingpan/
+   ```
+
+构建时会把 secret 写入 `public/runtime-config.js`。静态托管下密钥对访问者可见，建议使用短期、低额度 Key。
+

@@ -1,0 +1,78 @@
+name: 发布 GitHub Pages
+
+on:
+  push:
+    branches:
+      - master
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@v4
+
+      - name: 安装 Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: 安装依赖
+        run: npm ci
+
+      - name: 写入运行时配置
+        env:
+          SILICONFLOW_API_KEY: ${{ secrets.SILICONFLOW_API_KEY }}
+          SILICONFLOW_MODEL: ${{ vars.SILICONFLOW_MODEL }}
+        run: |
+          node <<'NODE'
+          const fs = require('fs');
+          fs.mkdirSync('public', { recursive: true });
+          const config = {
+            provider: 'siliconflow',
+            siliconFlowApiKey: process.env.SILICONFLOW_API_KEY || '',
+            siliconFlowModel: process.env.SILICONFLOW_MODEL || 'Qwen/Qwen2.5-14B-Instruct',
+            enableThinking: false,
+          };
+          fs.writeFileSync(
+            'public/runtime-config.js',
+            'window.__MINGPAN_CONFIG__ = ' + JSON.stringify(config) + ';\n'
+          );
+          console.log('runtime-config.js written (apiKey present: ' + !!config.siliconFlowApiKey + ')');
+          NODE
+
+      - name: 代码检查
+        run: npm run lint
+
+      - name: 构建
+        env:
+          VITE_BASE: /mingpan/
+        run: npm run build
+
+      - name: 上传 Pages 构建产物
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: 发布
+        id: deployment
+        uses: actions/deploy-pages@v4
