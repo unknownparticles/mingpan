@@ -6,7 +6,7 @@ import remarkGfm from 'remark-gfm';
 import { buildQimen } from '../lib/qimen';
 import { getBazi } from '../lib/bazi';
 import { getDateInfo } from '../lib/lunar';
-import { loadAIConfig } from '../lib/aiInterpret';
+import { loadAIConfig, hasAIKey } from '../lib/aiInterpret';
 import { callLLMWithCache } from '../lib/cache';
 import { KLine, Calendar, Wave, Seal, Ingot, Talent, Lotus, Marriage, Career, Wrench } from './Icon';
 import { ScrollCard } from './Ornament';
@@ -445,7 +445,7 @@ export function ToolSquare({ date, shiChenIndex, gender }: Props) {
   async function runTool() {
     if (!tool) return;
     const config = loadAIConfig();
-    if (!config.enabled || !config.apiKey) {
+    if (!config.enabled || !hasAIKey(config)) {
       setResult('⚠️ 请先在「设」中配置 API Key 后启用大师解读。');
       return;
     }
@@ -640,7 +640,7 @@ export function ToolSquare({ date, shiChenIndex, gender }: Props) {
                 gender={gender}
                 onSelectPoint={async (age) => {
                   const config = loadAIConfig();
-                  if (!config.enabled || !config.apiKey) {
+                  if (!config.enabled || !hasAIKey(config)) {
                     setResult('⚠️ 请先在「设」中配置 API Key 后启用大师解读。');
                     return;
                   }

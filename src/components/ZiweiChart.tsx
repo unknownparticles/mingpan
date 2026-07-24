@@ -3,7 +3,7 @@ import { astro } from 'iztro';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { applyZiweiSchool, SCHOOL_NAMES, type ZiweiSchool } from '../lib/ziweiSchool';
-import { loadAIConfig, SYSTEM_PROMPT_ZIWEI } from '../lib/aiInterpret';
+import { loadAIConfig, SYSTEM_PROMPT_ZIWEI, hasAIKey } from '../lib/aiInterpret';
 import { callLLMWithCache } from '../lib/cache';
 // 调用 cache 用 lib/cache
 import InfoPopover from './InfoPopover';
@@ -303,7 +303,7 @@ export default function ZiweiChart({ date, shiChenIndex, gender, lunarLeap }: Pr
   // AI 解读：基于选中的宫位做三方四正
   async function askAI() {
     const config = loadAIConfig();
-    if (!config.enabled || !config.apiKey) {
+    if (!config.enabled || !hasAIKey(config)) {
       setAiText(['⚠️ 请先在「设」中配置 API Key 后启用 AI 解读。']);
       return;
     }
@@ -811,7 +811,7 @@ ${ssfzInfo}
               result={overallReading}
               onRead={async () => {
                 const config = loadAIConfig();
-                if (!config.enabled || !config.apiKey) {
+                if (!config.enabled || !hasAIKey(config)) {
                   setOverallReading('⚠️ 请先在「设」中配置 API Key 后启用 AI 解读。');
                   return;
                 }

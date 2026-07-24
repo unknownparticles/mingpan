@@ -1,102 +1,409 @@
-// AI 解读 — 客户端调用 LLM（兼容 OpenAI / Anthropic 格式）
-// 用户需在设置中填入自己的 API Key + Base URL + Model
+// AI 解读 — 参考 one_min_ceo 的 SiliconFlow / 多厂商接入方式
+// 兼容 OpenAI Chat Completions；Key 优先本地设置，其次 runtime-config / 环境变量
 
 const STORAGE_KEY = 'mingpan:ai-config';
+
+export type AIProvider =
+  | 'siliconflow'
+  | 'deepseek'
+  | 'minimax'
+  | 'glm'
+  | 'openai'
+  | 'qwen'
+  | 'ollama'
+  | 'custom';
 
 export interface AIConfig {
   baseUrl: string;
   apiKey: string;
   model: string;
   enabled: boolean;
-  provider: string; // openai | deepseek | glm | custom
+  provider: AIProvider;
+  /** DeepSeek 系模型可选开启思考链（SiliconFlow / DeepSeek 官方） */
+  enableThinking: boolean;
 }
 
-export const LLM_PRESETS: Record<string, { baseUrl: string; model: string; label: string; placeholder: string }> = {
+export interface CallLLMOptions {
+  maxTokens?: number;
+  temperature?: number;
+  enableThinking?: boolean;
+  signal?: AbortSignal;
+}
+
+export interface ConnectionTestResult {
+  success: boolean;
+  message: string;
+  latency?: number;
+}
+
+type RuntimeConfig = {
+  provider?: AIProvider;
+  apiKey?: string;
+  baseUrl?: string;
+  model?: string;
+  siliconFlowApiKey?: string;
+  siliconFlowModel?: string;
+  deepseekApiKey?: string;
+  deepseekModel?: string;
+  minimaxApiKey?: string;
+  minimaxModel?: string;
+  enableThinking?: boolean;
+};
+
+declare global {
+  interface Window {
+    __MINGPAN_CONFIG__?: RuntimeConfig;
+  }
+}
+
+export const DEFAULT_SILICONFLOW_MODEL = 'Qwen/Qwen2.5-14B-Instruct';
+export const DEFAULT_MAX_TOKENS = 2200;
+
+export const LLM_PRESETS: Record<
+  AIProvider,
+  { baseUrl: string; model: string; label: string; placeholder: string; hint: string }
+> = {
+  siliconflow: {
+    label: 'SiliconFlow',
+    baseUrl: 'https://api.siliconflow.cn/v1',
+    model: DEFAULT_SILICONFLOW_MODEL,
+    placeholder: 'sk-... (硅基流动控制台)',
+    hint: 'cloud.siliconflow.cn · 推荐 Qwen/Qwen2.5-14B-Instruct',
+  },
   deepseek: {
     label: 'DeepSeek',
     baseUrl: 'https://api.deepseek.com/v1',
     model: 'deepseek-chat',
-    placeholder: 'sk-... (DeepSeek 控制台获取)',
+    placeholder: 'sk-... (DeepSeek 控制台)',
+    hint: 'platform.deepseek.com · deepseek-chat',
+  },
+  minimax: {
+    label: 'MiniMax',
+    baseUrl: 'https://api.minimax.io/v1',
+    model: 'MiniMax-M2.5',
+    placeholder: 'MiniMax API Key',
+    hint: 'platform.minimaxi.com · MiniMax-M2.5',
   },
   glm: {
     label: '智谱 GLM',
     baseUrl: 'https://open.bigmodel.cn/api/paas/v4',
     model: 'glm-4-flash',
     placeholder: '智谱 API Key (bigmodel.cn)',
+    hint: 'bigmodel.cn · glm-4-flash / glm-4-plus',
   },
   openai: {
     label: 'OpenAI',
     baseUrl: 'https://api.openai.com/v1',
     model: 'gpt-4o-mini',
-    placeholder: 'sk-... (OpenAI 控制台获取)',
+    placeholder: 'sk-... (OpenAI 控制台)',
+    hint: 'api.openai.com · gpt-4o-mini',
   },
   qwen: {
     label: '通义千问',
     baseUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1',
     model: 'qwen-turbo',
     placeholder: 'sk-... (阿里云 DashScope)',
+    hint: 'DashScope · qwen-turbo / qwen-plus',
   },
   ollama: {
     label: 'Ollama (本地)',
     baseUrl: 'http://localhost:11434/v1',
     model: 'qwen2.5:7b',
-    placeholder: '本地不需要 Key',
+    placeholder: '本地可不填 Key',
+    hint: 'localhost:11434 · 任意本地模型名',
   },
   custom: {
     label: '自定义',
     baseUrl: '',
     model: '',
     placeholder: 'API Key',
+    hint: '任意 OpenAI 兼容端点',
   },
 };
+
+function env(name: string): string {
+  const v = (import.meta.env as Record<string, string | undefined>)[name];
+  return typeof v === 'string' ? v.trim() : '';
+}
+
+function runtime(): RuntimeConfig {
+  if (typeof window === 'undefined') return {};
+  return window.__MINGPAN_CONFIG__ || {};
+}
+
+function pickKey(...values: Array<string | undefined>): string {
+  for (const v of values) {
+    if (v && v.trim()) return v.trim();
+  }
+  return '';
+}
+
+function defaultProviderFromEnv(): AIProvider {
+  const rt = runtime();
+  if (rt.provider && LLM_PRESETS[rt.provider]) return rt.provider;
+
+  const hasSf = !!(rt.siliconFlowApiKey || env('VITE_SILICONFLOW_API_KEY') || rt.apiKey || env('VITE_AI_API_KEY'));
+  const hasDs = !!(rt.deepseekApiKey || env('VITE_DEEPSEEK_API_KEY'));
+  const hasMm = !!(rt.minimaxApiKey || env('VITE_MINIMAX_API_KEY'));
+
+  if (hasSf) return 'siliconflow';
+  if (hasDs) return 'deepseek';
+  if (hasMm) return 'minimax';
+  return 'siliconflow';
+}
+
+function resolveEnvForProvider(provider: AIProvider): { apiKey: string; model: string; baseUrl: string } {
+  const rt = runtime();
+  const preset = LLM_PRESETS[provider];
+
+  if (provider === 'siliconflow') {
+    return {
+      apiKey: pickKey(rt.siliconFlowApiKey, env('VITE_SILICONFLOW_API_KEY'), rt.apiKey, env('VITE_AI_API_KEY')),
+      model: pickKey(rt.siliconFlowModel, env('VITE_SILICONFLOW_MODEL'), rt.model, env('VITE_AI_MODEL')) || preset.model,
+      baseUrl: pickKey(rt.baseUrl, env('VITE_AI_BASE_URL')) || preset.baseUrl,
+    };
+  }
+
+  if (provider === 'deepseek') {
+    return {
+      apiKey: pickKey(rt.deepseekApiKey, env('VITE_DEEPSEEK_API_KEY'), rt.apiKey, env('VITE_AI_API_KEY')),
+      model: pickKey(rt.deepseekModel, env('VITE_DEEPSEEK_MODEL'), rt.model, env('VITE_AI_MODEL')) || preset.model,
+      baseUrl: pickKey(rt.baseUrl, env('VITE_AI_BASE_URL')) || preset.baseUrl,
+    };
+  }
+
+  if (provider === 'minimax') {
+    return {
+      apiKey: pickKey(rt.minimaxApiKey, env('VITE_MINIMAX_API_KEY'), rt.apiKey, env('VITE_AI_API_KEY')),
+      model: pickKey(rt.minimaxModel, env('VITE_MINIMAX_MODEL'), rt.model, env('VITE_AI_MODEL')) || preset.model,
+      baseUrl: pickKey(rt.baseUrl, env('VITE_AI_BASE_URL')) || preset.baseUrl,
+    };
+  }
+
+  return {
+    apiKey: pickKey(rt.apiKey, env('VITE_AI_API_KEY')),
+    model: pickKey(rt.model, env('VITE_AI_MODEL')) || preset.model,
+    baseUrl: pickKey(rt.baseUrl, env('VITE_AI_BASE_URL')) || preset.baseUrl,
+  };
+}
+
+function normalizeConfig(raw: Partial<AIConfig> | null | undefined): AIConfig {
+  const provider = (raw?.provider && LLM_PRESETS[raw.provider as AIProvider]
+    ? (raw.provider as AIProvider)
+    : defaultProviderFromEnv());
+  const preset = LLM_PRESETS[provider];
+  const envResolved = resolveEnvForProvider(provider);
+
+  const apiKey = pickKey(raw?.apiKey, envResolved.apiKey);
+  const baseUrl = pickKey(raw?.baseUrl, envResolved.baseUrl) || preset.baseUrl;
+  const model = pickKey(raw?.model, envResolved.model) || preset.model;
+  const enableThinking =
+    typeof raw?.enableThinking === 'boolean'
+      ? raw.enableThinking
+      : typeof runtime().enableThinking === 'boolean'
+        ? !!runtime().enableThinking
+        : env('VITE_AI_ENABLE_THINKING') === 'true';
+
+  // 有 Key（或 Ollama 本地）时默认启用
+  const enabled =
+    typeof raw?.enabled === 'boolean'
+      ? raw.enabled
+      : !!(apiKey || provider === 'ollama');
+
+  return {
+    provider,
+    baseUrl,
+    apiKey,
+    model,
+    enabled,
+    enableThinking,
+  };
+}
 
 export function loadAIConfig(): AIConfig {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
-    if (raw) return JSON.parse(raw);
-  } catch {}
-  return {
-    baseUrl: '',
-    apiKey: '',
-    model: '',
-    enabled: false,
-    provider: 'deepseek',
-  };
+    if (raw) return normalizeConfig(JSON.parse(raw));
+  } catch {
+    // ignore
+  }
+  return normalizeConfig(null);
 }
 
 export function saveAIConfig(c: AIConfig) {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(c));
+  const next = normalizeConfig(c);
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
+
+  // 同步到运行时，便于同页即时生效
+  if (typeof window !== 'undefined') {
+    window.__MINGPAN_CONFIG__ = {
+      ...(window.__MINGPAN_CONFIG__ || {}),
+      provider: next.provider,
+      apiKey: next.apiKey,
+      baseUrl: next.baseUrl,
+      model: next.model,
+      enableThinking: next.enableThinking,
+      ...(next.provider === 'siliconflow'
+        ? { siliconFlowApiKey: next.apiKey, siliconFlowModel: next.model }
+        : {}),
+      ...(next.provider === 'deepseek'
+        ? { deepseekApiKey: next.apiKey, deepseekModel: next.model }
+        : {}),
+      ...(next.provider === 'minimax'
+        ? { minimaxApiKey: next.apiKey, minimaxModel: next.model }
+        : {}),
+    };
+  }
 }
 
-// 通用 OpenAI 兼容 chat 调用
+export function hasAIKey(config?: AIConfig): boolean {
+  const c = config || loadAIConfig();
+  if (c.provider === 'ollama') return true;
+  return !!c.apiKey?.trim();
+}
+
+export function getProviderDisplayName(provider: AIProvider): string {
+  return LLM_PRESETS[provider]?.label || provider;
+}
+
+function friendlyHttpError(status: number, body: string, providerLabel: string): string {
+  if (status === 401) return 'API Key 校验失败 (401)，请检查 Key 是否正确。';
+  if (status === 402) return '账户欠费 (402)，请前往服务商控制台充值。';
+  if (status === 403) return '无权访问 (403)，请检查 Key 权限或模型白名单。';
+  if (status === 429) return '请求过于频繁 (429)，请稍后重试。';
+  if (status >= 500) return `${providerLabel} 服务异常 (${status})，请稍后重试。`;
+  const detail = body.replace(/\s+/g, ' ').slice(0, 180);
+  return `LLM 调用失败: ${status}${detail ? ` ${detail}` : ''}`;
+}
+
+function extractContent(data: any): string {
+  const msg = data?.choices?.[0]?.message;
+  const content = msg?.content;
+  if (typeof content === 'string' && content.trim()) return content;
+
+  // 部分思考模型把正文放在 reasoning_content
+  const reasoning = msg?.reasoning_content;
+  if (typeof reasoning === 'string' && reasoning.trim()) return reasoning;
+
+  // 数组 content（少数兼容实现）
+  if (Array.isArray(content)) {
+    const joined = content
+      .map((part: any) => (typeof part === 'string' ? part : part?.text || ''))
+      .join('')
+      .trim();
+    if (joined) return joined;
+  }
+
+  return '';
+}
+
+/** 通用 OpenAI 兼容 chat 调用（参考 one_min_ceo） */
 export async function callLLM(
   config: AIConfig,
   messages: { role: string; content: string }[],
   systemPrompt?: string,
+  options: CallLLMOptions = {},
 ): Promise<string> {
+  const provider = config.provider || 'siliconflow';
+  const preset = LLM_PRESETS[provider] || LLM_PRESETS.custom;
+  const baseUrl = (config.baseUrl || preset.baseUrl).replace(/\/$/, '');
+  const model = config.model || preset.model;
+  const apiKey = config.apiKey?.trim() || (provider === 'ollama' ? 'ollama' : '');
+  const providerLabel = getProviderDisplayName(provider);
+
+  if (!baseUrl) {
+    throw new Error('未配置 Base URL，请到「设」中填写 API 端点。');
+  }
+  if (!apiKey) {
+    throw new Error(`未配置 ${providerLabel} API Key，请到「设」中填写。`);
+  }
+  if (!model) {
+    throw new Error('未配置模型名称，请到「设」中填写 Model。');
+  }
+
   const msgs = systemPrompt
     ? [{ role: 'system', content: systemPrompt }, ...messages]
     : messages;
 
-  const res = await fetch(`${config.baseUrl.replace(/\/$/, '')}/chat/completions`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${config.apiKey}`,
-    },
-    body: JSON.stringify({
-      model: config.model,
-      messages: msgs,
-      temperature: 0.7,
-      max_tokens: 1500,
-    }),
-  });
-  if (!res.ok) {
-    const err = await res.text();
-    throw new Error(`LLM 调用失败: ${res.status} ${err.slice(0, 200)}`);
+  const maxTokens = options.maxTokens ?? DEFAULT_MAX_TOKENS;
+  const temperature = options.temperature ?? 0.7;
+  const enableThinking =
+    options.enableThinking !== undefined ? options.enableThinking : !!config.enableThinking;
+
+  const body: Record<string, unknown> = {
+    model,
+    messages: msgs,
+    temperature,
+    max_tokens: maxTokens,
+  };
+
+  // SiliconFlow / DeepSeek 思考模型开关
+  if (model.toLowerCase().includes('deepseek') || model.toLowerCase().includes('r1')) {
+    body.enable_thinking = enableThinking;
   }
+
+  let res: Response;
+  try {
+    res = await fetch(`${baseUrl}/chat/completions`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify(body),
+      signal: options.signal,
+    });
+  } catch (e: any) {
+    if (e?.name === 'AbortError') throw e;
+    const msg = e?.message || '网络请求失败';
+    if (String(msg).includes('Failed to fetch')) {
+      throw new Error('网络请求失败，请检查网络、CORS 或 API 端点是否可达。');
+    }
+    throw new Error(msg);
+  }
+
+  if (!res.ok) {
+    const err = await res.text().catch(() => '');
+    throw new Error(friendlyHttpError(res.status, err, providerLabel));
+  }
+
   const data = await res.json();
-  return data.choices?.[0]?.message?.content || '（无返回）';
+  const text = extractContent(data);
+  if (!text) {
+    throw new Error(`${providerLabel} 返回空内容，请检查模型是否可用。`);
+  }
+  return text;
+}
+
+export async function testApiConnection(config?: AIConfig): Promise<ConnectionTestResult> {
+  const c = config || loadAIConfig();
+  const start = performance.now();
+  try {
+    const text = await callLLM(
+      c,
+      [{ role: 'user', content: 'ping' }],
+      undefined,
+      { maxTokens: 8, temperature: 0.1, enableThinking: false },
+    );
+    const latency = performance.now() - start;
+    if (!text) {
+      return {
+        success: false,
+        message: 'API 响应成功，但返回内容为空。',
+        latency,
+      };
+    }
+    return {
+      success: true,
+      message: `连接成功！延迟 ${latency.toFixed(0)} ms`,
+      latency,
+    };
+  } catch (e: any) {
+    return {
+      success: false,
+      message: e?.message || '连接失败',
+    };
+  }
 }
 
 // 命盘解读系统提示词

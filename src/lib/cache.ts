@@ -1,5 +1,5 @@
 // AI 回答本地缓存：以 (birthKey + question) 为 key，结果存 localStorage
-import { callLLM, type AIConfig } from './aiInterpret';
+import { callLLM, type AIConfig, type CallLLMOptions } from './aiInterpret';
 
 const CACHE_KEY = 'mingpan:ai-cache';
 const MAX_ENTRIES = 100;
@@ -105,6 +105,7 @@ export async function callLLMWithCache(
   mode: string,
   systemPrompt?: string,
   useCache: boolean = true,
+  options?: CallLLMOptions,
 ): Promise<{ text: string; cached: boolean; cacheKey: string }> {
   const cacheKey = buildCacheKey(birth, question, mode);
 
@@ -115,7 +116,7 @@ export async function callLLMWithCache(
     }
   }
 
-  const text = await callLLM(config, messages, systemPrompt);
+  const text = await callLLM(config, messages, systemPrompt, options);
   setCached(cacheKey, {
     question,
     mode,
