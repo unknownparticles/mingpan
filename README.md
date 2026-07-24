@@ -69,7 +69,8 @@ window.__MINGPAN_CONFIG__ = {
 
 接入 [ai.alunapi.top](https://ai.alunapi.top)（源码见登录仓库 `ai/` 模块）：
 
-- **已登录**：默认开启 AI，使用平台模型（Workers AI / 硅基流动），Bearer Token 鉴权
+- **已登录**：默认开启 AI，优先调用平台 AI（`ai.alunapi.top` 的服务端 Key/额度）
+- **平台失败**：提示到设置填写「自备 API Key」；若本地已有 Key 则自动回退直连
 - **未登录**：必须在设置页填写自备 API Key 后才可启用 AI
 
 ```bash

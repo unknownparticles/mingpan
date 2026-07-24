@@ -106,9 +106,23 @@ async function api<T>(path: string, init: RequestInit = {}, withAuth = false): P
   }
 
   if (!data?.ok) {
-    const msg = data?.error?.message || `请求失败 (${res.status})`;
+    const code = data?.error?.code as string | undefined;
+    let msg = data?.error?.message || `请求失败 (${res.status})`;
+    if (res.status === 401 || code === 'unauthorized') {
+      msg = '登录态无效或已过期，请重新登录';
+    } else if (res.status === 429 || code === 'daily_limit') {
+      msg = '今日平台额度已用完';
+    } else if (res.status === 402 || code === 'insufficient_points') {
+      msg = '平台积分不足';
+    } else if (res.status === 403 || code === 'membership_required') {
+      msg = '当前会员等级不足以使用该模型';
+    } else if (res.status === 503 || code === 'provider_not_configured') {
+      msg = '平台模型上游未配置';
+    } else if (res.status >= 500 || code === 'ai_error') {
+      msg = msg || '平台模型服务异常';
+    }
     const err = new Error(msg) as Error & { code?: string; status?: number };
-    err.code = data?.error?.code;
+    err.code = code;
     err.status = res.status;
     throw err;
   }

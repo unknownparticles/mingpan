@@ -6,6 +6,8 @@ import {
   LLM_PRESETS,
   testApiConnection,
   canUseAI,
+  getPlatformFailInfo,
+  clearPlatformFailInfo,
   type AIConfig,
   type AIProvider,
   type AIAccessMode,
@@ -28,6 +30,7 @@ export default function Settings({ onClose, onAuthChange }: Props) {
   const [platformDefault, setPlatformDefault] = useState('');
   const [platformMe, setPlatformMe] = useState<CfAiMe | null>(null);
   const [platformHint, setPlatformHint] = useState('');
+  const [platformFail, setPlatformFail] = useState(getPlatformFailInfo());
 
   useEffect(() => {
     let cancelled = false;
@@ -76,6 +79,10 @@ export default function Settings({ onClose, onAuthChange }: Props) {
     }));
     setSaved(false);
     setTestResult('');
+    if (mode === 'byok') {
+      // 用户已按引导切到自备 Key，保留失败提示直至保存成功连接
+      setPlatformFail(getPlatformFailInfo());
+    }
   }
 
   function selectProvider(key: AIProvider) {
@@ -93,7 +100,12 @@ export default function Settings({ onClose, onAuthChange }: Props) {
 
   function save() {
     saveAIConfig(config);
+    if (config.accessMode === 'byok' && config.apiKey?.trim()) {
+      // 用户已填写自备 Key，可收起失败引导
+      // 真正连通成功后再清；这里先保留提示
+    }
     setSaved(true);
+    setPlatformFail(getPlatformFailInfo());
     setTimeout(() => setSaved(false), 1500);
   }
 
@@ -103,6 +115,12 @@ export default function Settings({ onClose, onAuthChange }: Props) {
     try {
       const result = await testApiConnection(config);
       setTestResult(result.success ? `✅ ${result.message}` : `❌ ${result.message}`);
+      if (result.success && config.accessMode === 'byok') {
+        clearPlatformFailInfo();
+        setPlatformFail(null);
+      } else {
+        setPlatformFail(getPlatformFailInfo());
+      }
     } catch (e: any) {
       setTestResult(`❌ ${e.message || '连接失败'}`);
     } finally {
@@ -138,10 +156,38 @@ export default function Settings({ onClose, onAuthChange }: Props) {
         </section>
 
         <div className="text-xs text-gold opacity-60 leading-relaxed">
-          AI 解读支持两种方式：
-          <b>登录后默认走平台 AI</b>（{getAiBaseUrl()}，无需自备 Key）；
-          <b>未登录需自备 API Key</b> 才可开启。
+          登录后默认使用 <b>平台 AI 额度</b>（{getAiBaseUrl()}）。
+          平台调用失败后再填写 <b>自备 API Key</b> 作为后备；未登录则必须自备 Key。
         </div>
+
+        {platformFail && (
+          <div className="rounded border border-vermilion/40 bg-vermilion/10 p-3 text-xs text-rice leading-relaxed space-y-2">
+            <div className="text-vermilion font-medium">平台 AI 最近调用失败</div>
+            <div className="opacity-90 break-words">{platformFail.message}</div>
+            <div className="text-gold/70">
+              登录默认使用平台额度；失效后请点下方按钮切换到「自备 API Key」，填写 SiliconFlow / DeepSeek 等密钥后保存并测试连接。
+            </div>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                className="btn-vermilion text-[11px] px-2.5 py-1 rounded"
+                onClick={() => setAccessMode('byok')}
+              >
+                去填写自备 Key
+              </button>
+              <button
+                type="button"
+                className="btn-ghost text-[11px] px-2.5 py-1 rounded"
+                onClick={() => {
+                  clearPlatformFailInfo();
+                  setPlatformFail(null);
+                }}
+              >
+                忽略
+              </button>
+            </div>
+          </div>
+        )}
 
         <div className="flex items-center justify-between">
           <span className="text-rice text-sm">启用 AI 解读</span>

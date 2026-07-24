@@ -6,6 +6,7 @@ import { isLoggedIn } from './auth';
 import { callCfAiChat, getAiBaseUrl } from './cfAi';
 
 const STORAGE_KEY = 'mingpan:ai-config';
+const PLATFORM_FAIL_KEY = 'mingpan:ai-platform-fail';
 
 export type AIProvider =
   | 'siliconflow'
@@ -301,6 +302,50 @@ export function getAIGateMessage(config?: AIConfig): string {
   return '⚠️ AI 暂不可用，请检查设置。';
 }
 
+
+export interface PlatformFailInfo {
+  message: string;
+  at: number;
+}
+
+export function getPlatformFailInfo(): PlatformFailInfo | null {
+  try {
+    const raw = localStorage.getItem(PLATFORM_FAIL_KEY);
+    if (!raw) return null;
+    const data = JSON.parse(raw) as PlatformFailInfo;
+    if (!data?.message) return null;
+    return data;
+  } catch {
+    return null;
+  }
+}
+
+export function clearPlatformFailInfo() {
+  try {
+    localStorage.removeItem(PLATFORM_FAIL_KEY);
+  } catch {
+    // ignore
+  }
+}
+
+function markPlatformFail(message: string) {
+  try {
+    localStorage.setItem(
+      PLATFORM_FAIL_KEY,
+      JSON.stringify({ message: message.slice(0, 300), at: Date.now() } satisfies PlatformFailInfo),
+    );
+  } catch {
+    // ignore
+  }
+}
+
+/** 平台失败后的引导文案 */
+export function getPlatformFailGuide(detail?: string): string {
+  const d = (detail || '').trim();
+  const head = d ? `平台 AI 调用失败：${d}` : '平台 AI 调用失败';
+  return `${head}。请到「设」→ 切换「自备 API Key」并填写自己的密钥后重试。`;
+}
+
 /** 登录成功后：默认开启平台 AI
  * force=true：主动登录/注册时调用
  * force=false：会话恢复时仅在当前不可用时补齐
@@ -310,19 +355,18 @@ export function applyLoginAIDefaults(opts?: { force?: boolean }) {
   const force = !!opts?.force;
 
   if (!force) {
+    // 会话恢复：已可调用则不动；否则补齐平台默认
     if (canUseAI(c)) return;
-  } else if (c.accessMode === 'byok' && hasAIKey(c)) {
-    // 用户明确自备 Key：只确保开启，不抢通道
-    if (!c.enabled) saveAIConfig({ ...c, enabled: true });
-    return;
   }
 
+  // 登录后始终优先平台 AI（自备 Key 仅作平台失效后备）
   saveAIConfig({
     ...c,
     enabled: true,
     accessMode: 'platform',
     platformModel: c.platformModel || DEFAULT_PLATFORM_MODEL,
   });
+  if (force) clearPlatformFailInfo();
 }
 
 /** 退出登录后：若无自备 Key 则关闭 AI，并切回 byok */
@@ -378,22 +422,49 @@ async function callPlatformLLM(
   options: CallLLMOptions = {},
 ): Promise<string> {
   if (!isLoggedIn()) {
-    throw new Error('平台 AI 需要登录。未登录请在「设」中填写自备 API Key。');
+    throw new Error(getPlatformFailGuide('未登录，无法使用平台额度'));
   }
   const model = (config.platformModel || config.model || DEFAULT_PLATFORM_MODEL).trim();
-  if (!model) throw new Error('未选择平台模型，请到「设」中选择。');
+  if (!model) throw new Error(getPlatformFailGuide('未选择平台模型'));
 
-  const result = await callCfAiChat({
-    model,
-    messages,
-    system: systemPrompt,
-    temperature: options.temperature ?? 0.7,
-    maxTokens: options.maxTokens ?? DEFAULT_MAX_TOKENS,
-    signal: options.signal,
-  });
-  const text = result.message?.content?.trim() || '';
-  if (!text) throw new Error('平台 AI 返回空内容，请稍后重试或更换模型。');
-  return text;
+  try {
+    const result = await callCfAiChat({
+      model,
+      messages,
+      system: systemPrompt,
+      temperature: options.temperature ?? 0.7,
+      maxTokens: options.maxTokens ?? DEFAULT_MAX_TOKENS,
+      signal: options.signal,
+    });
+    const text = result.message?.content?.trim() || '';
+    if (!text) throw new Error('平台 AI 返回空内容');
+    // 成功则清除失败标记
+    clearPlatformFailInfo();
+    return text;
+  } catch (e: any) {
+    if (e?.name === 'AbortError') throw e;
+    const detail = e?.message || '未知错误';
+    markPlatformFail(detail);
+
+    // 若本地已配置自备 Key，自动回退一次，避免解读中断
+    if (hasAIKey(config) || config.provider === 'ollama') {
+      try {
+        return await callByokLLM(
+          { ...config, accessMode: 'byok' },
+          messages,
+          systemPrompt,
+          options,
+        );
+      } catch (byokErr: any) {
+        if (byokErr?.name === 'AbortError') throw byokErr;
+        throw new Error(
+          getPlatformFailGuide(`${detail}；自备 Key 也失败：${byokErr?.message || '未知错误'}`),
+        );
+      }
+    }
+
+    throw new Error(getPlatformFailGuide(detail));
+  }
 }
 
 /** 自备 Key：OpenAI 兼容 chat 调用 */
