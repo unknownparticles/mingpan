@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256">
+  <defs>
+    <radialGradient id="g" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#c8392f"/>
+      <stop offset="60%" stop-color="#8b1a13"/>
+      <stop offset="100%" stop-color="#0a0606"/>
+    </radialGradient>
+  </defs>
+  <rect width="256" height="256" rx="40" fill="url(#g)"/>
+  <g fill="none" stroke="#c8a45c" stroke-width="3" stroke-linecap="round">
+    <circle cx="128" cy="128" r="76"/>
+    <line x1="52" y1="128" x2="204" y2="128"/>
+    <line x1="128" y1="52" x2="128" y2="204"/>
+    <line x1="74" y1="74" x2="182" y2="182"/>
+    <line x1="182" y1="74" x2="74" y2="182"/>
+  </g>
+  <text x="128" y="142" text-anchor="middle" font-size="56" font-family="serif" fill="#c8a45c" font-weight="700">命</text>
+</svg>

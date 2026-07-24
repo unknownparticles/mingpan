@@ -1,0 +1,352 @@
+@import "tailwindcss";
+
+@theme {
+  --color-ink: #0a0606;
+  --color-ink-soft: #1a0f0f;
+  --color-vermilion: #c8392f;
+  --color-vermilion-deep: #8b1a13;
+  --color-gold: #c8a45c;
+  --color-gold-bright: #e6c878;
+  --color-rice: #f5ecd9;
+  --color-jade: #4a7a5a;
+  --font-serif: "LXGW WenKai Screen", "Noto Serif SC", "STKaiti", "KaiTi", "Songti SC", serif;
+  --font-display: "LXGW WenKai Screen", "Ma Shan Zheng", "Noto Serif SC", serif;
+}
+
+* {
+  -webkit-tap-highlight-color: transparent;
+}
+
+html, body, #root {
+  height: 100%;
+  margin: 0;
+  background: var(--color-ink);
+  color: var(--color-rice);
+  font-family: var(--font-serif);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* 国风背景纹理 */
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  background-image:
+    radial-gradient(circle at 20% 20%, rgba(200, 57, 47, 0.05), transparent 50%),
+    radial-gradient(circle at 80% 70%, rgba(200, 164, 92, 0.04), transparent 50%),
+    repeating-linear-gradient(
+      0deg,
+      transparent,
+      transparent 2px,
+      rgba(200, 164, 92, 0.02) 2px,
+      rgba(200, 164, 92, 0.02) 3px
+    );
+  z-index: 0;
+}
+
+/* 太极八卦背景图 */
+body::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  background-image: url("/bg-taichi.svg");
+  background-repeat: no-repeat;
+  background-position: center center;
+  background-size: min(140vh, 140vw);
+  opacity: 0.06;
+}
+
+#root {
+  position: relative;
+  z-index: 1;
+}
+
+/* 卷轴/宣纸纹理卡片 */
+.paper {
+  background:
+    linear-gradient(135deg, rgba(245, 236, 217, 0.04), rgba(245, 236, 217, 0.01)),
+    rgba(26, 15, 15, 0.6);
+  border: 1px solid rgba(200, 164, 92, 0.25);
+  backdrop-filter: blur(6px);
+  border-radius: 4px;
+  box-shadow:
+    inset 0 0 0 1px rgba(200, 164, 92, 0.05),
+    0 4px 20px rgba(0, 0, 0, 0.4);
+  position: relative;
+  overflow: hidden;
+}
+.paper::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='100' height='100'><filter id='n'><feTurbulence baseFrequency='0.9' numOctaves='2' seed='5'/><feColorMatrix values='0 0 0 0 0.78  0 0 0 0 0.64  0 0 0 0 0.36  0 0 0 0.04 0'/></filter><rect width='100' height='100' filter='url(%23n)'/></svg>");
+  opacity: 0.5;
+  pointer-events: none;
+  mix-blend-mode: overlay;
+}
+
+.btn-vermilion {
+  background: linear-gradient(180deg, #d63a30, #8b1a13);
+  color: #f5ecd9;
+  border: 1px solid rgba(230, 200, 120, 0.4);
+  box-shadow: 0 2px 8px rgba(139, 26, 19, 0.4);
+  transition: all 0.2s;
+}
+.btn-vermilion:active {
+  transform: translateY(1px);
+  box-shadow: 0 1px 4px rgba(139, 26, 19, 0.4);
+}
+
+.btn-ghost {
+  background: transparent;
+  color: var(--color-gold);
+  border: 1px solid rgba(200, 164, 92, 0.3);
+  transition: all 0.2s;
+}
+.btn-ghost:active {
+  background: rgba(200, 164, 92, 0.1);
+}
+
+.text-gold { color: var(--color-gold); }
+.text-gold-bright { color: var(--color-gold-bright); }
+.text-vermilion { color: var(--color-vermilion); }
+.text-rice { color: var(--color-rice); }
+
+.divider-gold {
+  height: 1px;
+  background: linear-gradient(90deg, transparent, var(--color-gold), transparent);
+  opacity: 0.4;
+}
+
+/* 滚动条美化 */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb {
+  background: rgba(200, 164, 92, 0.3);
+  border-radius: 3px;
+}
+
+/* 宫位高亮动画 */
+@keyframes pulse-gold {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(200, 164, 92, 0.4); }
+  50% { box-shadow: 0 0 0 4px rgba(200, 164, 92, 0); }
+}
+.pulse-gold { animation: pulse-gold 2s infinite; }
+
+/* 标题字体 */
+.title-display {
+  font-family: var(--font-display);
+  letter-spacing: 0.3em;
+}
+
+/* 旋转的太极动画 */
+@keyframes spin-slow {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+.spin-slow { animation: spin-slow 8s linear infinite; }
+
+@keyframes spin-slow-reverse {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(-360deg); }
+}
+.spin-slow-reverse { animation: spin-slow-reverse 12s linear infinite; }
+
+/* 流光动画 */
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+.shimmer {
+  background: linear-gradient(90deg, transparent, rgba(230, 200, 120, 0.4), transparent);
+  background-size: 200% 100%;
+  animation: shimmer 2s infinite;
+}
+
+/* 跳动的光晕 */
+@keyframes glow {
+  0%, 100% { opacity: 0.3; transform: scale(1); }
+  50% { opacity: 0.7; transform: scale(1.05); }
+}
+.glow { animation: glow 2s ease-in-out infinite; }
+
+/* 命盘加载遮罩 */
+@keyframes fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+.fade-in { animation: fade-in 0.3s ease-out; }
+
+@keyframes fade-out {
+  from { opacity: 1; }
+  to { opacity: 0; }
+}
+.fade-out { animation: fade-out 0.5s ease-out forwards; }
+
+/* 三方四正连线动画 */
+@keyframes dash-flow {
+  to { stroke-dashoffset: -20; }
+}
+.ssfz-line-active {
+  stroke-dasharray: 1.5 1;
+  animation: dash-flow 0.8s linear infinite;
+}
+@keyframes pulse-dot {
+  0%, 100% { r: 0.6; opacity: 0.7; transform: scale(1); }
+  50% { r: 1.0; opacity: 1; transform: scale(1.3); }
+}
+.ssfz-dot {
+  animation: pulse-dot 1.2s ease-in-out infinite;
+  transform-origin: center;
+  transform-box: fill-box;
+}
+@keyframes pulse-dot-outer {
+  0%, 100% { r: 1.2; opacity: 0.2; }
+  50% { r: 2.2; opacity: 0.5; }
+}
+.ssfz-dot-pulse {
+  animation: pulse-dot-outer 1.5s ease-in-out infinite;
+}
+
+/* 选中宫位周围罗盘圈 */
+@keyframes ring-rotate {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+@keyframes ring-rotate-rev {
+  from { transform: rotate(360deg); }
+  to { transform: rotate(0deg); }
+}
+@keyframes ring-pulse {
+  0%, 100% { stroke-opacity: 0.3; r: 2.5; }
+  50% { stroke-opacity: 0.7; r: 3.2; }
+}
+@keyframes ring-pulse-outer {
+  0%, 100% { stroke-opacity: 0.1; r: 5; }
+  50% { stroke-opacity: 0.4; r: 6.5; }
+}
+.ssfz-ring {
+  transform-origin: center;
+  transform-box: fill-box;
+  animation: ring-pulse 2s ease-in-out infinite;
+}
+.ssfz-ring-outer {
+  transform-origin: center;
+  transform-box: fill-box;
+  animation: ring-pulse-outer 2.5s ease-in-out infinite;
+}
+
+/* 光芒扩散 */
+@keyframes ray-expand {
+  0% { r: 1; stroke-opacity: 1; }
+  100% { r: 4; stroke-opacity: 0; }
+}
+.ssfz-ray {
+  animation: ray-expand 1.8s ease-out infinite;
+  transform-origin: center;
+  transform-box: fill-box;
+}
+
+/* 奇门连线动画 */
+@keyframes q-dash-flow {
+  to { stroke-dashoffset: -20; }
+}
+.qimen-line-active {
+  animation: q-dash-flow 1s linear infinite;
+}
+
+/* 查询加载动画：光线旋转 */
+@keyframes ray-rotate {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+.ray-rotate {
+  animation: ray-rotate 3s linear infinite;
+  transform-origin: 50% 50%;
+}
+
+/* 阶段动画 - 列表项滑入 */
+@keyframes stage-slide-in {
+  from { opacity: 0; transform: translateX(-15px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+.stage-slide-in {
+  animation: stage-slide-in 0.6s ease-out forwards;
+}
+
+/* 阶段动画 - 标题淡入放大 */
+@keyframes stage-title {
+  0% { opacity: 0; transform: scale(0.8); letter-spacing: 0.3em; }
+  60% { opacity: 1; transform: scale(1.1); letter-spacing: 0.2em; }
+  100% { opacity: 1; transform: scale(1); letter-spacing: 0.15em; }
+}
+.stage-title-anim {
+  animation: stage-title 0.8s ease-out forwards;
+}
+
+/* 阶段动画 - 列表逐项进入 */
+@keyframes stage-item-in {
+  from { opacity: 0; transform: translateY(8px) scale(0.95); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+.stage-item-anim {
+  animation: stage-item-in 0.4s ease-out forwards;
+  opacity: 0;
+}
+
+/* 高亮闪烁 */
+@keyframes highlight-blink {
+  0%, 100% { box-shadow: 0 0 0 1px rgba(200, 164, 92, 0.4); }
+  50% { box-shadow: 0 0 0 2px rgba(230, 200, 120, 0.9), 0 0 16px rgba(230, 200, 120, 0.5); }
+}
+.highlight-blink {
+  animation: highlight-blink 1.5s ease-in-out infinite;
+}
+
+/* 总结段发光 */
+@keyframes summary-glow {
+  0%, 100% { box-shadow: 0 0 12px rgba(230, 200, 120, 0.2), inset 0 0 8px rgba(200, 57, 47, 0.1); }
+  50% { box-shadow: 0 0 24px rgba(230, 200, 120, 0.4), inset 0 0 12px rgba(200, 57, 47, 0.2); }
+}
+.summary-glow {
+  animation: summary-glow 3s ease-in-out infinite;
+}
+@keyframes q-pulse-ring {
+  0%, 100% { stroke-opacity: 0.4; r: 4; }
+  50% { stroke-opacity: 0.9; r: 6; }
+}
+.qimen-pulse-ring {
+  animation: q-pulse-ring 1.8s ease-in-out infinite;
+  transform-origin: center;
+  transform-box: fill-box;
+}
+@keyframes q-pulse-dot {
+  0%, 100% { stroke-opacity: 0.6; r: 1.5; }
+  50% { stroke-opacity: 1; r: 2.5; }
+}
+.qimen-pulse-dot {
+  animation: q-pulse-dot 1.5s ease-in-out infinite;
+  transform-origin: center;
+  transform-box: fill-box;
+}
+@keyframes q-center-rotate {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+.qimen-center-ring {
+  transform-origin: center;
+  transform-box: fill-box;
+  animation: q-center-rotate 8s linear infinite;
+}
+@keyframes q-center-rotate-rev {
+  from { transform: rotate(360deg); }
+  to { transform: rotate(0deg); }
+}
+.qimen-center-ring-outer {
+  transform-origin: center;
+  transform-box: fill-box;
+  animation: q-center-rotate-rev 15s linear infinite;
+}

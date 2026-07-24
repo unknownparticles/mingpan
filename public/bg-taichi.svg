@@ -1,0 +1,84 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 800" fill="none" stroke="#c8a45c" stroke-width="1.2">
+  <!-- 外圆 -->
+  <circle cx="400" cy="400" r="380"/>
+  <circle cx="400" cy="400" r="360" stroke-opacity="0.5"/>
+  <circle cx="400" cy="400" r="340" stroke-opacity="0.3"/>
+
+  <!-- 太极主体：阴阳鱼 -->
+  <g transform="translate(400 400)">
+    <!-- 大圆 S 分割线 -->
+    <path d="M 0,-200 A 200,200 0 0 1 0,200 A 100,100 0 0 1 0,0 A 100,100 0 0 0 0,-200 Z" fill="#c8392f" fill-opacity="0.85" stroke="none"/>
+    <path d="M 0,-200 A 200,200 0 0 0 0,200 A 100,100 0 0 0 0,0 A 100,100 0 0 1 0,-200 Z" fill="#0a0606" fill-opacity="0.85" stroke="none"/>
+    <!-- 阴阳眼 -->
+    <circle cx="0" cy="-100" r="12" fill="#0a0606" fill-opacity="0.9" stroke="none"/>
+    <circle cx="0" cy="100" r="12" fill="#c8392f" fill-opacity="0.9" stroke="none"/>
+  </g>
+
+  <!-- 八卦方位标 -->
+  <g font-family="serif" font-size="32" fill="#c8a45c" text-anchor="middle" font-weight="bold">
+    <!-- 乾(西北) 兑(西) 离(南) 震(东) 巽(东南) 坎(北) 艮(东北) 坤(西南) -->
+    <text x="165" y="280" transform="rotate(-45 165 280)">兑</text>
+    <text x="115" y="415">坎</text>
+    <text x="165" y="555" transform="rotate(45 165 555)">艮</text>
+    <text x="400" y="650">坤</text>
+    <text x="635" y="555" transform="rotate(-45 635 555)">巽</text>
+    <text x="685" y="415">离</text>
+    <text x="635" y="280" transform="rotate(45 635 280)">震</text>
+    <text x="400" y="180">乾</text>
+  </g>
+
+  <!-- 八卦线条（简化版：每卦三爻） -->
+  <g stroke="#c8a45c" stroke-width="2" stroke-linecap="round">
+    <!-- 乾 ☰ 三阳 -->
+    <g transform="translate(400 130)">
+      <line x1="-20" y1="-12" x2="20" y2="-12"/>
+      <line x1="-20" y1="0" x2="20" y2="0"/>
+      <line x1="-20" y1="12" x2="20" y2="12"/>
+    </g>
+    <!-- 兑 ☱ -->
+    <g transform="translate(115 230)">
+      <line x1="-20" y1="-12" x2="20" y2="-12"/>
+      <line x1="-20" y1="0" x2="6" y2="0"/>
+      <line x1="-20" y1="12" x2="20" y2="12"/>
+    </g>
+    <!-- 离 ☲ -->
+    <g transform="translate(685 230)">
+      <line x1="-20" y1="-12" x2="6" y2="-12"/>
+      <line x1="-20" y1="0" x2="20" y2="0"/>
+      <line x1="-20" y1="12" x2="6" y2="12"/>
+    </g>
+    <!-- 震 ☳ -->
+    <g transform="translate(115 570)">
+      <line x1="-20" y1="-12" x2="20" y2="-12"/>
+      <line x1="-20" y1="0" x2="6" y2="0"/>
+      <line x1="-20" y1="12" x2="6" y2="12"/>
+    </g>
+    <!-- 巽 ☴ -->
+    <g transform="translate(685 570)">
+      <line x1="-20" y1="-12" x2="6" y2="-12"/>
+      <line x1="-20" y1="0" x2="6" y2="0"/>
+      <line x1="-20" y1="12" x2="20" y2="12"/>
+    </g>
+    <!-- 坎 ☵ -->
+    <g transform="translate(400 670)">
+      <line x1="-20" y1="-12" x2="6" y2="-12"/>
+      <line x1="-20" y1="0" x2="6" y2="0"/>
+      <line x1="-20" y1="12" x2="6" y2="12"/>
+    </g>
+    <!-- 艮 ☶ -->
+    <g transform="translate(115 400)">
+      <line x1="-20" y1="-12" x2="6" y2="-12"/>
+      <line x1="-20" y1="0" x2="6" y2="0"/>
+      <line x1="-20" y1="12" x2="20" y2="12"/>
+    </g>
+    <!-- 坤 ☷ -->
+    <g transform="translate(685 400)">
+      <line x1="-20" y1="-12" x2="6" y2="-12"/>
+      <line x1="-6" y1="-12" x2="20" y2="-12"/>
+      <line x1="-20" y1="0" x2="6" y2="0"/>
+      <line x1="-6" y1="0" x2="20" y2="0"/>
+      <line x1="-20" y1="12" x2="6" y2="12"/>
+      <line x1="-6" y1="12" x2="20" y2="12"/>
+    </g>
+  </g>
+</svg>
