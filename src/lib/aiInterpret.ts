@@ -36,25 +36,8 @@ export interface ConnectionTestResult {
   latency?: number;
 }
 
-type RuntimeConfig = {
-  provider?: AIProvider;
-  apiKey?: string;
-  baseUrl?: string;
-  model?: string;
-  siliconFlowApiKey?: string;
-  siliconFlowModel?: string;
-  deepseekApiKey?: string;
-  deepseekModel?: string;
-  minimaxApiKey?: string;
-  minimaxModel?: string;
-  enableThinking?: boolean;
-};
-
-declare global {
-  interface Window {
-    __MINGPAN_CONFIG__?: RuntimeConfig;
-  }
-}
+// 运行时配置类型见 src/vite-env.d.ts 的 MingpanRuntimeConfig
+type RuntimeConfig = MingpanRuntimeConfig;
 
 export const DEFAULT_SILICONFLOW_MODEL = 'Qwen/Qwen2.5-14B-Instruct';
 export const DEFAULT_MAX_TOKENS = 2200;

@@ -15,6 +15,12 @@ import { Taiji, Luopan, Bazi as BaziIcon, Spark, Gear, Seal, Wrench, Sparkle } f
 import { trueSolarTimeCorrection } from './lib/lunar';
 import { loadRecords, saveRecord, deleteRecord } from './lib/store';
 import type { HistoryRecord } from './lib/store';
+import {
+  consumeAuthCallbackToken,
+  fetchMe,
+  getStoredUser,
+  type AuthUser,
+} from './lib/auth';
 
 type Tab = 'ziwei' | 'qimen' | 'bazi' | 'overall' | 'tools' | 'form' | 'home' | 'divination' | 'settings';
 
@@ -35,9 +41,24 @@ export default function App() {
   const [loading, setLoading] = useState<{ show: boolean; type: 'ziwei' | 'qimen' | 'bazi' }>({
     show: false, type: 'ziwei',
   });
+  const [authUser, setAuthUser] = useState<AuthUser | null>(() => getStoredUser());
 
   useEffect(() => {
     setRecords(loadRecords());
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        await consumeAuthCallbackToken();
+        const me = await fetchMe();
+        if (!cancelled) setAuthUser(me?.user || getStoredUser());
+      } catch {
+        if (!cancelled) setAuthUser(getStoredUser());
+      }
+    })();
+    return () => { cancelled = true; };
   }, []);
 
   function handleSubmit(data: BirthInput) {
@@ -134,13 +155,31 @@ export default function App() {
             </div>
           </div>
         </div>
-        <button
-          onClick={() => switchTab('settings')}
-          className="relative w-9 h-9 rounded-full border border-gold/30 bg-ink-soft/60 backdrop-blur flex items-center justify-center text-gold hover:border-gold/80 hover:text-gold-bright transition"
-          title="设置"
-        >
-          <Gear size={18} />
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => switchTab('settings')}
+            className="relative max-w-[7.5rem] h-9 px-2 rounded-full border border-gold/30 bg-ink-soft/60 backdrop-blur flex items-center gap-1.5 text-gold hover:border-gold/80 hover:text-gold-bright transition"
+            title={authUser ? `账号：${authUser.displayName || authUser.username}` : '登录 / 设置'}
+          >
+            <span className="w-6 h-6 rounded-full border border-gold/40 bg-ink/70 overflow-hidden flex items-center justify-center text-[10px] text-gold-bright shrink-0">
+              {authUser?.avatarUrl ? (
+                <img src={authUser.avatarUrl} alt="" className="w-full h-full object-cover" />
+              ) : (
+                (authUser?.displayName || authUser?.username || '登').slice(0, 1)
+              )}
+            </span>
+            <span className="text-[10px] tracking-wider truncate hidden sm:inline">
+              {authUser ? (authUser.displayName || authUser.username) : '登录'}
+            </span>
+          </button>
+          <button
+            onClick={() => switchTab('settings')}
+            className="relative w-9 h-9 rounded-full border border-gold/30 bg-ink-soft/60 backdrop-blur flex items-center justify-center text-gold hover:border-gold/80 hover:text-gold-bright transition"
+            title="设置"
+          >
+            <Gear size={18} />
+          </button>
+        </div>
       </header>
 
       {/* 生辰速览卡（有 birth 才显示） */}
@@ -245,7 +284,7 @@ export default function App() {
         )}
 
         {tab === 'settings' && (
-          <Settings onClose={() => setTab(birth ? 'ziwei' : 'home')} />
+          <Settings onClose={() => setTab(birth ? 'ziwei' : 'home')} onAuthChange={setAuthUser} />
         )}
       </main>
 

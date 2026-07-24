@@ -63,6 +63,32 @@ window.__MINGPAN_CONFIG__ = {
 
 注意：静态站点部署时密钥会对页面访问者可见，建议使用短期、低额度 Key，或改为后端代理。
 
+
+## 账号登录（CF Auth）
+
+接入独立登录服务 [login.alunapi.top](https://login.alunapi.top) / [register.alunapi.top](https://register.alunapi.top)。
+
+- 设置页「账号」支持密码登录/注册、OAuth 跳转、会员等级与积分展示
+- 跨域（如 GitHub Pages）使用 `localStorage` 中的 Bearer Token，不依赖 Cookie
+- OAuth / 外站登录回跳通过 URL hash：`#cf_auth_token=...`（应用启动时自动消费）
+
+环境变量 / runtime-config：
+
+```bash
+VITE_AUTH_BASE_URL=https://login.alunapi.top
+VITE_LOGIN_BASE_URL=https://login.alunapi.top
+VITE_REGISTER_BASE_URL=https://register.alunapi.top
+```
+
+```js
+window.__MINGPAN_CONFIG__ = {
+  authBaseUrl: 'https://login.alunapi.top',
+  loginBaseUrl: 'https://login.alunapi.top',
+  registerBaseUrl: 'https://register.alunapi.top',
+  // ...AI 配置
+};
+```
+
 ## GitHub Pages 发布
 
 仓库已配置 GitHub Actions：`.github/workflows/pages.yml`。

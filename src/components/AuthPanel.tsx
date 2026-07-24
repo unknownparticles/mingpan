@@ -15,8 +15,16 @@ import {
 
 type Mode = 'login' | 'register';
 
-export default function AuthPanel() {
-  const [user, setUser] = useState<AuthUser | null>(getStoredUser());
+interface Props {
+  onAuthChange?: (user: AuthUser | null) => void;
+}
+
+export default function AuthPanel({ onAuthChange }: Props) {
+  const [user, setUserState] = useState<AuthUser | null>(getStoredUser());
+  function setUser(next: AuthUser | null) {
+    setUserState(next);
+    onAuthChange?.(next);
+  }
   const [config, setConfig] = useState<AuthPublicConfig | null>(null);
   const [mode, setMode] = useState<Mode>('login');
   const [loading, setLoading] = useState(false);

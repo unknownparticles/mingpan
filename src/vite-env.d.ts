@@ -11,6 +11,9 @@ interface ImportMetaEnv {
   readonly VITE_DEEPSEEK_MODEL?: string;
   readonly VITE_MINIMAX_API_KEY?: string;
   readonly VITE_MINIMAX_MODEL?: string;
+  readonly VITE_AUTH_BASE_URL?: string;
+  readonly VITE_LOGIN_BASE_URL?: string;
+  readonly VITE_REGISTER_BASE_URL?: string;
 }
 
 interface ImportMeta {
@@ -37,6 +40,9 @@ interface MingpanRuntimeConfig {
   minimaxApiKey?: string;
   minimaxModel?: string;
   enableThinking?: boolean;
+  authBaseUrl?: string;
+  loginBaseUrl?: string;
+  registerBaseUrl?: string;
 }
 
 interface Window {

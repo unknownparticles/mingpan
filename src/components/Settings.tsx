@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import AuthPanel from './AuthPanel';
 import {
   loadAIConfig,
   saveAIConfig,
@@ -10,9 +11,10 @@ import {
 
 interface Props {
   onClose: () => void;
+  onAuthChange?: (user: import('../lib/auth').AuthUser | null) => void;
 }
 
-export default function Settings({ onClose }: Props) {
+export default function Settings({ onClose, onAuthChange }: Props) {
   const [config, setConfig] = useState<AIConfig>(loadAIConfig());
   const [saved, setSaved] = useState(false);
   const [testing, setTesting] = useState(false);
@@ -67,6 +69,14 @@ export default function Settings({ onClose }: Props) {
       </div>
 
       <div className="space-y-5">
+        <section className="rounded border border-gold/20 bg-ink-soft/30 p-3 space-y-2">
+          <div className="flex items-center justify-between">
+            <h3 className="text-sm text-gold-bright title-display tracking-widest">账 号</h3>
+            <span className="text-[10px] text-gold/40">CF Auth · alunapi.top</span>
+          </div>
+          <AuthPanel onAuthChange={onAuthChange} />
+        </section>
+
         <div className="text-xs text-gold opacity-60 leading-relaxed">
           启用 AI 解读需配置 LLM API（兼容 OpenAI Chat Completions）。
           默认推荐 <b>SiliconFlow 硅基流动</b>（与 one_min_ceo 同款接入）。

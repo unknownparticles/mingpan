@@ -4,5 +4,8 @@ window.__MINGPAN_CONFIG__ = window.__MINGPAN_CONFIG__ || {
   provider: 'siliconflow',
   siliconFlowApiKey: '',
   siliconFlowModel: 'Qwen/Qwen2.5-14B-Instruct',
-  enableThinking: false
+  enableThinking: false,
+  authBaseUrl: 'https://login.alunapi.top',
+  loginBaseUrl: 'https://login.alunapi.top',
+  registerBaseUrl: 'https://register.alunapi.top'
 };

@@ -36,6 +36,9 @@ jobs:
         env:
           SILICONFLOW_API_KEY: ${{ secrets.SILICONFLOW_API_KEY }}
           SILICONFLOW_MODEL: ${{ vars.SILICONFLOW_MODEL }}
+          AUTH_BASE_URL: ${{ vars.AUTH_BASE_URL }}
+          LOGIN_BASE_URL: ${{ vars.LOGIN_BASE_URL }}
+          REGISTER_BASE_URL: ${{ vars.REGISTER_BASE_URL }}
         run: |
           node <<'NODE'
           const fs = require('fs');
@@ -45,6 +48,9 @@ jobs:
             siliconFlowApiKey: process.env.SILICONFLOW_API_KEY || '',
             siliconFlowModel: process.env.SILICONFLOW_MODEL || 'Qwen/Qwen2.5-14B-Instruct',
             enableThinking: false,
+            authBaseUrl: process.env.AUTH_BASE_URL || 'https://login.alunapi.top',
+            loginBaseUrl: process.env.LOGIN_BASE_URL || 'https://login.alunapi.top',
+            registerBaseUrl: process.env.REGISTER_BASE_URL || 'https://register.alunapi.top',
           };
           fs.writeFileSync(
             'public/runtime-config.js',
