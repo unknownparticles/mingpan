@@ -13,6 +13,12 @@ import { ScrollCard } from './Ornament';
 import { KLineAnim } from './KLineAnim';
 import { LoadingStages } from './LoadingStages';
 import { generateKLineData } from '../lib/kline';
+import {
+  analyzeDateSelectLocal,
+  analyzeFortuneLocal,
+  formatDateSelectLocalMarkdown,
+  formatFortuneLocalMarkdown,
+} from '../lib/almanac';
 
 interface Props {
   date: Date;
@@ -95,29 +101,36 @@ ${tableLines}
       { key: 'range', label: '择日范围（近 N 天）', type: 'text', placeholder: '如 30' },
     ],
     buildPrompt: (info) => {
-      const rangeDays = Math.max(1, Math.min(365, Number.parseInt(String(info.range || '30'), 10) || 30));
+      const local = info.dateSelectLocal || analyzeDateSelectLocal({
+        birthDate: info.date,
+        shiChenIndex: info.shiChenIndex,
+        gender: info.gender,
+        event: info.event || '通用',
+        rangeDays: Number.parseInt(String(info.range || '30'), 10) || 30,
+        now: info.now,
+      });
       return {
-        system: '你是精通择日的命理大师，结合八字喜忌、神煞宜忌、黄历宜忌，给出具体吉日推荐。所有日期必须以用户提供的当前浏览器时间为基准，禁止使用过时年份。',
+        system: '你是精通择日的命理大师。必须先基于本地黄历/八字解析结果再展开，不得编造列表外日期，不得使用过时年份。',
         user: `【生辰】${info.birthStr}  性别：${info.gender}
-【当前时间】${info.nowStr}（以浏览器本地时间为准，当前年份=${info.nowYear}）
-【事项】${info.event || '通用'}
-【范围】从今天起未来 ${rangeDays} 天内（约至 ${info.rangeEndStr}）
+【事项】${info.event || local.event}
 
-请列出 3-5 个最合适的吉日，按以下格式：
+${local.promptBlock}
+
+请严格按以下格式输出（推荐日必须来自本地优选列表）：
 
 # 一、择日原则
-[80字以内：基于此命局的喜忌说明择日原则]
+[80字以内：基于日主与事项说明原则]
 
 # 二、推荐吉日
 ## YYYY-MM-DD 星期X
 - **宜**：...  **忌**：...
-- **理由**：...
-- **时辰**：建议 XX 时（最吉）
+- **理由**：结合本地评分与命局
+- **时辰**：建议 XX 时
 
-[推荐 3-5 天；日期必须落在 ${info.nowYear} 年及之后的真实公历日期，禁止出现 2023 等过时年份]
+[从本地优选日中挑 3-5 天]
 
 # 三、避忌日期
-[列出 2-3 个绝对要避开的日期和原因；同样必须基于当前时间]
+[从本地避忌日中挑 2-3 天说明]
 
 总字数 600-800。`,
       };
@@ -133,32 +146,42 @@ ${tableLines}
     inputFields: [
       { key: 'period', label: '时间粒度', type: 'select', options: ['年', '月', '日', '时'] },
     ],
-    buildPrompt: (info) => ({
-      system: '你是精通紫微斗数、八字、奇门遁甲的命理大师，专长运势分析。所有时间表述必须以用户提供的当前浏览器时间为基准。',
-      user: `【生辰】${info.birthStr}  性别：${info.gender}
-【当前时间】${info.nowStr}（以浏览器本地时间为准，当前年份=${info.nowYear}）
-【粒度】${info.period || '月'}
+    buildPrompt: (info) => {
+      const local = info.fortuneLocal || analyzeFortuneLocal({
+        birthDate: info.date,
+        shiChenIndex: info.shiChenIndex,
+        gender: info.gender,
+        period: info.period || '月',
+        now: info.now,
+      });
+      return {
+        system: '你是精通紫微斗数、八字、奇门遁甲的命理大师。必须先基于本地运势解析再展开，不得改写干支与当前时间。',
+        user: `【生辰】${info.birthStr}  性别：${info.gender}
+【粒度】${info.period || local.period}
 
-请基于命盘，围绕**当前时间之后**的**${info.period || '月'}**运势分析：
+${local.promptBlock}
 
-# 一、${info.period || '月'}运势总评
-[200字以内：综合分析该${info.period || '月'}的整体运势]
+请基于**本地解析**做 ${info.period || local.period} 运势详批：
+
+# 一、${info.period || local.period}运势总评
+[200字以内：先复述本地焦点与干支，再综合判断]
 
 # 二、五大领域
-- ## 事业：分析此期事业运
-- ## 财运：分析此期财运
-- ## 感情：分析此期感情运
-- ## 健康：分析此期健康
-- ## 人际：分析此期人际
+- ## 事业
+- ## 财运
+- ## 感情
+- ## 健康
+- ## 人际
 
 # 三、吉日/吉时
-[列出该${info.period || '月'}内最适合行动的具体日期/时辰；年份必须使用 ${info.nowYear} 及之后]
+[仅可使用本地给出的当前时间锚点；不要编造过时年份]
 
 # 四、注意事项
-[列出该${info.period || '月'}需特别注意避免的事]
+[结合本地注意项展开]
 
 总字数 800-1200。`,
-    }),
+      };
+    },
   },
   {
     id: 'coreChart',
@@ -399,6 +422,7 @@ export function ToolSquare({ date, shiChenIndex, gender }: Props) {
   const [inputs, setInputs] = useState<Record<string, string>>({});
   const [partnerDate, setPartnerDate] = useState({ date: '1990-01-01', gender: '女' as '男' | '女' });
   const [result, setResult] = useState<string | null>(null);
+  const [localResult, setLocalResult] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [loadingStage, setLoadingStage] = useState(0);
 
@@ -433,7 +457,7 @@ export function ToolSquare({ date, shiChenIndex, gender }: Props) {
     return p ? (p.majorStars || []).map((s: any) => s.name).join('、') || '空' : '空';
   }, [astrolabe]);
 
-  const buildInfo = () => {
+  const buildInfo = (): any => {
     const dateInfo = `${date.getFullYear()}年${date.getMonth() + 1}月${date.getDate()}日 ${date.getHours()}时`;
     const now = new Date();
     const pad = (n: number) => String(n).padStart(2, '0');
@@ -466,19 +490,56 @@ export function ToolSquare({ date, shiChenIndex, gender }: Props) {
   async function runTool() {
     if (!tool) return;
     const config = loadAIConfig();
-    if (!canUseAI(config)) {
-      setResult(getAIGateMessage(config));
-      return;
-    }
     setLoading(true);
     setResult(null);
+    setLocalResult(null);
     setLoadingStage(0);
+
+    // 择日 / 运势：先本地解析，再决定是否调用 AI
+    const info = buildInfo();
+    let localMarkdown: string | null = null;
+    if (tool.id === 'dateSelect') {
+      const local = analyzeDateSelectLocal({
+        birthDate: date,
+        shiChenIndex,
+        gender,
+        event: info.event || '通用',
+        rangeDays: Number.parseInt(String(info.range || '30'), 10) || 30,
+        now: info.now,
+      });
+      info.dateSelectLocal = local;
+      localMarkdown = formatDateSelectLocalMarkdown(local);
+      setLocalResult(localMarkdown);
+    } else if (tool.id === 'fortune') {
+      const local = analyzeFortuneLocal({
+        birthDate: date,
+        shiChenIndex,
+        gender,
+        period: info.period || '月',
+        now: info.now,
+      });
+      info.fortuneLocal = local;
+      localMarkdown = formatFortuneLocalMarkdown(local);
+      setLocalResult(localMarkdown);
+    }
+
+    if (!canUseAI(config)) {
+      // 本地工具即使无 AI 也给出解析；其它工具仍提示配置
+      if (localMarkdown) {
+        setResult('（未配置可用 AI，以上为本地解析结果。配置平台 AI 或自备 Key 后可生成大师详解。）');
+      } else {
+        setResult(getAIGateMessage(config));
+      }
+      setLoading(false);
+      setLoadingStage(0);
+      return;
+    }
+
     // 4 阶段进度动画
     const t1 = setTimeout(() => setLoadingStage(1), 600);
     const t2 = setTimeout(() => setLoadingStage(2), 1500);
     const t3 = setTimeout(() => setLoadingStage(3), 2400);
     try {
-      const info = buildInfo();
       const { system, user } = tool.buildPrompt(info);
       // 涉及“当前/未来年份”的工具，缓存键必须带上当前年（择日/运势再细到天），避免复用过时年份结果
       const daySensitive = tool.id === 'dateSelect' || tool.id === 'fortune';
@@ -486,7 +547,7 @@ export function ToolSquare({ date, shiChenIndex, gender }: Props) {
       const todayKey = `${info.now.getFullYear()}-${info.now.getMonth() + 1}-${info.now.getDate()}`;
       const yearKey = String(info.nowYear);
       const cacheKey = daySensitive
-        ? `${tool.id}-${todayKey}-${JSON.stringify(inputs)}-${partnerDate.date}-${partnerDate.gender}`
+        ? `${tool.id}-${todayKey}-v2-${JSON.stringify(inputs)}-${partnerDate.date}-${partnerDate.gender}`
         : yearSensitive
           ? `${tool.id}-${yearKey}-${JSON.stringify(inputs)}-${partnerDate.date}-${partnerDate.gender}`
           : `${tool.id}-${JSON.stringify(inputs)}-${partnerDate.date}-${partnerDate.gender}`;
@@ -540,6 +601,7 @@ export function ToolSquare({ date, shiChenIndex, gender }: Props) {
                 setActiveTool(t.id);
                 setInputs({});
                 setResult(null);
+                setLocalResult(null);
               }}
               className="group relative text-left transition hover:scale-[1.03] active:scale-95"
             >
@@ -594,7 +656,7 @@ export function ToolSquare({ date, shiChenIndex, gender }: Props) {
               </div>
             </div>
             <button
-              onClick={() => { setActiveTool(null); setResult(null); setInputs({}); }}
+              onClick={() => { setActiveTool(null); setResult(null); setLocalResult(null); setInputs({}); }}
               className="text-[10px] text-gold/60 hover:text-gold-bright tracking-widest title-display px-2 py-1 border border-gold/20 rounded"
             >← 返 回</button>
           </div>
@@ -726,6 +788,28 @@ export function ToolSquare({ date, shiChenIndex, gender }: Props) {
           )}
 
           {/* 结果 */}
+          {localResult && (
+            <div className="paper p-4 bg-ink-soft/60 border border-jade/40 fade-in rounded">
+              <div className="flex items-center gap-2 mb-3 pb-2 border-b border-jade/30">
+                <Calendar size={18} className="text-jade" />
+                <div className="flex-1">
+                  <div className="text-sm text-jade font-bold title-display tracking-widest">
+                    本 地 解 析
+                  </div>
+                  <div className="text-[9px] text-gold/50 tracking-wider">先本地黄历/干支推演，再交由 AI 详批</div>
+                </div>
+              </div>
+              <div className="prose prose-invert prose-sm max-w-none text-rice/90 text-xs leading-relaxed
+                [&_h1]:text-sm [&_h1]:text-gold-bright [&_h1]:title-display
+                [&_h2]:text-xs [&_h2]:text-gold [&_h2]:title-display
+                [&_h3]:text-xs [&_h3]:text-gold/90
+                [&_strong]:text-gold-bright
+                [&_li]:my-0.5">
+                <ReactMarkdown remarkPlugins={[remarkGfm]}>{localResult}</ReactMarkdown>
+              </div>
+            </div>
+          )}
+
           {result && (
             <div className="paper p-4 bg-ink-soft/60 border border-gold/30 fade-in rounded">
               {/* 大师印章头部 */}

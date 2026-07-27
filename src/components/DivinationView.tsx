@@ -2,9 +2,17 @@
  * 占卜结果展示
  * - 梅花易数：本卦/变卦/动爻/解读
  * - 小六壬：六宫爻/宫位/解读
+ * - 有可用 AI 时，基于本地起卦结果自动详批
  */
-import { Spark } from './Icon';
+import { useEffect, useMemo, useState } from 'react';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
+import { Spark, Seal } from './Icon';
 import { ScrollCard, Divider } from './Ornament';
+import { loadAIConfig, canUseAI, getAIGateMessage } from '../lib/aiInterpret';
+import { callLLMWithCache } from '../lib/cache';
+import { buildDivinationPrompt } from '../lib/almanac';
+import { LoadingStages } from './LoadingStages';
 
 interface Props {
   result: { type: 'meiHua' | 'xiaoLiuRen'; data: any; question?: string };
@@ -22,19 +30,137 @@ const XL_MEANINGS: Record<string, { color: string; desc: string; career: string;
 };
 
 export function DivinationView({ result, onBack, onStartInput }: Props) {
-  if (result.type === 'meiHua') return <MeiHuaView data={result.data} question={result.question} onBack={onBack} onStartInput={onStartInput} />;
+  if (result.type === 'meiHua') {
+    return <MeiHuaView data={result.data} question={result.question} onBack={onBack} onStartInput={onStartInput} />;
+  }
   return <XiaoLiuRenView data={result.data} question={result.question} onBack={onBack} onStartInput={onStartInput} />;
+}
+
+function AiDivinationPanel({
+  kind,
+  payload,
+  question,
+}: {
+  kind: 'meiHua' | 'xiaoLiuRen';
+  payload: any;
+  question?: string;
+}) {
+  const [aiText, setAiText] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [loadingStage, setLoadingStage] = useState(0);
+  const [autoTried, setAutoTried] = useState(false);
+
+  const cacheIdentity = useMemo(() => {
+    if (kind === 'meiHua') {
+      return `mh-${(payload.numbers || []).join('-')}-${payload.benGua}-${payload.dongYao}-${payload.huGua}-${question || ''}`;
+    }
+    return `xl-${payload.date || ''}-${payload.hourIndex ?? ''}-${payload.palace}-${payload.upper}-${payload.middle}-${payload.lower}-${question || ''}`;
+  }, [kind, payload, question]);
+
+  async function runAi(force = false) {
+    const config = loadAIConfig();
+    if (!canUseAI(config)) {
+      setAiText(getAIGateMessage(config));
+      return;
+    }
+    setLoading(true);
+    setLoadingStage(0);
+    const t1 = setTimeout(() => setLoadingStage(1), 500);
+    const t2 = setTimeout(() => setLoadingStage(2), 1200);
+    const t3 = setTimeout(() => setLoadingStage(3), 2000);
+    try {
+      const { system, user } = buildDivinationPrompt({ type: kind, data: payload, question });
+      const now = new Date();
+      const { text } = await callLLMWithCache(
+        config,
+        [{ role: 'user', content: user }],
+        {
+          date: `${now.getFullYear()}-${now.getMonth() + 1}-${now.getDate()}-${now.getHours()}-${now.getMinutes()}`,
+          shiChen: Number(payload.hourIndex ?? 0),
+          gender: '不分',
+        },
+        `${cacheIdentity}${force ? '-force' : ''}`,
+        `divination-${kind}`,
+        system,
+      );
+      setAiText(typeof text === 'string' ? text : (text as any)?.text || String(text));
+    } catch (e: any) {
+      setAiText(`❌ ${e.message || '请求失败'}`);
+    } finally {
+      clearTimeout(t1); clearTimeout(t2); clearTimeout(t3);
+      setLoading(false);
+      setLoadingStage(0);
+    }
+  }
+
+  useEffect(() => {
+    setAiText(null);
+    setAutoTried(false);
+  }, [cacheIdentity]);
+
+  useEffect(() => {
+    if (autoTried) return;
+    const config = loadAIConfig();
+    if (!canUseAI(config)) {
+      setAutoTried(true);
+      return;
+    }
+    setAutoTried(true);
+    void runAi(false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autoTried, cacheIdentity]);
+
+  return (
+    <ScrollCard className="rounded-lg p-3 space-y-2" accent="vermilion">
+      <div className="flex items-center justify-between gap-2">
+        <div className="flex items-center gap-2">
+          <Seal size={18} className="text-vermilion" />
+          <div>
+            <div className="text-sm text-gold-bright font-bold title-display tracking-widest">AI 卦 象 详 批</div>
+            <div className="text-[9px] text-gold/50 tracking-wider">基于本地起卦结果展开，不改卦</div>
+          </div>
+        </div>
+        <button
+          onClick={() => void runAi(true)}
+          disabled={loading}
+          className="text-[10px] px-2 py-1 rounded border border-gold/30 text-gold hover:border-gold-bright hover:text-gold-bright disabled:opacity-50 title-display tracking-widest"
+        >
+          {loading ? '解析中' : aiText ? '重新详批' : '开始详批'}
+        </button>
+      </div>
+
+      {loading && (
+        <div className="py-2">
+          <LoadingStages stage={loadingStage} />
+        </div>
+      )}
+
+      {aiText && !loading && (
+        <div className="text-sm text-rice leading-relaxed prose prose-invert prose-sm max-w-none
+          prose-headings:text-gold-bright prose-headings:font-bold prose-headings:my-2
+          prose-h1:text-base prose-h2:text-sm prose-h3:text-sm
+          prose-p:my-1.5 prose-ul:my-1 prose-li:my-0.5
+          prose-strong:text-vermilion prose-em:text-jade">
+          <ReactMarkdown remarkPlugins={[remarkGfm]}>{aiText}</ReactMarkdown>
+        </div>
+      )}
+
+      {!aiText && !loading && (
+        <div className="text-[10px] text-gold/50 leading-relaxed">
+          已完成本地起卦。若已登录平台 AI 或配置自备 Key，将自动生成详批；也可点击右上角手动发起。
+        </div>
+      )}
+    </ScrollCard>
+  );
 }
 
 function MeiHuaView({ data, question, onBack, onStartInput }: any) {
   const upper = data.upperTrigram;
   const lower = data.lowerTrigram;
-      // 6 爻：上卦[0..2] + 下卦[3..5]（下到上）
-  const all6Lines = [...data.lowerBinary, ...data.upperBinary]; // 下->上
-  
+  const all6Lines = [...data.lowerBinary, ...data.upperBinary];
+
   return (
     <div className="space-y-3">
-      {/* 返回 */}
       <button
         onClick={onBack}
         className="flex items-center gap-1.5 text-gold/70 hover:text-gold text-xs title-display tracking-widest"
@@ -45,7 +171,6 @@ function MeiHuaView({ data, question, onBack, onStartInput }: any) {
         返回首页
       </button>
 
-      {/* 标题 */}
       <div className="text-center">
         <div className="text-xs text-gold/60 title-display tracking-widest">
           梅 花 易 数 · 灵 卦
@@ -55,9 +180,7 @@ function MeiHuaView({ data, question, onBack, onStartInput }: any) {
         )}
       </div>
 
-      {/* 本卦 + 变卦 */}
       <div className="grid grid-cols-2 gap-3">
-        {/* 本卦 */}
         <ScrollCard className="rounded-lg p-3" accent="gold">
           <div className="text-center">
             <div className="text-[10px] text-gold/70 title-display tracking-widest mb-1">本 卦</div>
@@ -74,11 +197,10 @@ function MeiHuaView({ data, question, onBack, onStartInput }: any) {
           </div>
         </ScrollCard>
 
-        {/* 变卦 */}
         <ScrollCard className="rounded-lg p-3" accent="vermilion">
           <div className="text-center">
             <div className="text-[10px] text-gold/70 title-display tracking-widest mb-1">变 卦</div>
-            <div className="flex items-center justify-center gap-1 my-2">
+            <div className="flex items-center gap-1 justify-center my-2">
               <BaguaGua lines={all6Lines.map((l: number, i: number) => i === data.dongYao - 1 ? 1 - l : l).slice(3)} color="#c8392f" />
               <BaguaGua lines={all6Lines.map((l: number, i: number) => i === data.dongYao - 1 ? 1 - l : l).slice(0, 3)} color="#c8392f" />
             </div>
@@ -92,44 +214,46 @@ function MeiHuaView({ data, question, onBack, onStartInput }: any) {
         </ScrollCard>
       </div>
 
-      {/* 三个数字 */}
       <ScrollCard className="rounded-lg p-3" accent="gold">
         <div className="flex items-center justify-around">
           {data.numbers.map((n: number, i: number) => (
             <div key={i} className="text-center">
               <div className="text-[9px] text-gold/60 title-display tracking-widest">第{i + 1}数</div>
-              <div className="text-2xl text-gold-bright font-bold title-display mt-1">{n}</div>
+              <div className="text-2xl text-gold-bright font-bold title-display">{n}</div>
             </div>
           ))}
         </div>
       </ScrollCard>
 
-      {/* 解读 */}
-      <ScrollCard className="rounded-lg p-4" accent="gold">
-        <div className="flex items-center gap-2 mb-2">
-          <Spark size={20} className="text-vermilion" />
-          <div className="text-base text-gold-bright font-bold title-display tracking-widest">卦 象 解 读</div>
+      <ScrollCard className="rounded-lg p-3 space-y-2" accent="gold">
+        <div className="flex items-center gap-2">
+          <Spark size={16} className="text-gold-bright" />
+          <span className="text-sm text-gold-bright font-bold title-display tracking-widest">本 地 粗 解</span>
         </div>
+        <p className="text-xs text-rice/90 leading-relaxed">{data.guaCi || data.interpretation?.overall}</p>
         <Divider />
-        <p className="text-sm text-rice leading-loose mb-3">{data.interpretation.overall}</p>
-        <div className="grid grid-cols-2 gap-2 text-xs">
-          <Domain label="事 业" content={data.interpretation.career} />
-          <Domain label="财 运" content={data.interpretation.wealth} />
-          <Domain label="感 情" content={data.interpretation.love} />
-          <Domain label="健 康" content={data.interpretation.health} />
+        <div className="grid grid-cols-2 gap-2 text-[11px]">
+          <div><span className="text-gold/60">事业</span> · {data.interpretation?.career}</div>
+          <div><span className="text-gold/60">财运</span> · {data.interpretation?.wealth}</div>
+          <div><span className="text-gold/60">感情</span> · {data.interpretation?.love}</div>
+          <div><span className="text-gold/60">健康</span> · {data.interpretation?.health}</div>
         </div>
       </ScrollCard>
 
-      {/* 引导录入 */}
-      <div className="p-3 bg-ink-soft/40 border border-gold/20 rounded text-center">
-        <div className="text-[10px] text-gold/70 mb-2 title-display tracking-widest">
-          录 入 完 整 生 辰  ·  解 锁 紫 微 · 奇 门 · 八 字
-        </div>
+      <AiDivinationPanel kind="meiHua" payload={data} question={question} />
+
+      <div className="flex gap-2">
+        <button
+          onClick={onBack}
+          className="flex-1 py-2.5 rounded-full border border-gold/30 text-gold text-xs title-display tracking-widest hover:border-gold-bright"
+        >
+          再 起 一 卦
+        </button>
         <button
           onClick={onStartInput}
-          className="px-5 py-2 rounded-full bg-vermilion/80 hover:bg-vermilion text-cream text-xs title-display tracking-widest"
+          className="flex-1 py-2.5 rounded-full bg-vermilion/90 text-cream text-xs title-display tracking-widest"
         >
-          录 入 生 辰
+          录入生辰深批
         </button>
       </div>
     </div>
@@ -137,7 +261,20 @@ function MeiHuaView({ data, question, onBack, onStartInput }: any) {
 }
 
 function XiaoLiuRenView({ data, question, onBack, onStartInput }: any) {
-  const m = XL_MEANINGS[data.palace];
+  const meaning = XL_MEANINGS[data.palace] || {
+    color: '#c8a45c',
+    desc: data.desc || '',
+    career: data.career || '',
+    wealth: data.wealth || '',
+    love: data.love || '',
+    health: data.health || '',
+  };
+  const steps = [
+    { label: '初限', value: data.upper },
+    { label: '中限', value: data.middle },
+    { label: '末限', value: data.lower },
+  ];
+
   return (
     <div className="space-y-3">
       <button
@@ -151,108 +288,81 @@ function XiaoLiuRenView({ data, question, onBack, onStartInput }: any) {
       </button>
 
       <div className="text-center">
-        <div className="text-xs text-gold/60 title-display tracking-widest">
-          小 六 壬 · 即 时 课
-        </div>
+        <div className="text-xs text-gold/60 title-display tracking-widest">小 六 壬 · 即 时 课</div>
         {question && <div className="text-[10px] text-gold/50 mt-1 italic">「{question}」</div>}
-        <div className="text-[9px] text-gold/40 mt-1 title-display tracking-widest">
-          {data.month}月{data.day}日 · {data.hour}时
-        </div>
+        {(data.date || data.hour) && (
+          <div className="text-[10px] text-gold/40 mt-1">
+            {data.date || ''} {data.hour || data.shiChen || ''}时
+          </div>
+        )}
       </div>
 
-      {/* 宫位大字 */}
-      <div className="text-center py-4">
-        <div
-          className="inline-block px-8 py-3 rounded-lg border-2"
-          style={{
-            borderColor: m.color,
-            background: `linear-gradient(180deg, ${m.color}33 0%, ${m.color}11 100%)`,
-            boxShadow: `0 0 24px ${m.color}66`,
-          }}
-        >
-          <div className="text-3xl text-cream font-bold title-display tracking-[0.3em]" style={{ color: m.color }}>
+      <ScrollCard className="rounded-lg p-4" accent="gold">
+        <div className="text-center mb-3">
+          <div className="text-[10px] text-gold/60 title-display tracking-widest">落 宫</div>
+          <div className="text-3xl font-bold title-display tracking-widest mt-1" style={{ color: meaning.color }}>
             {data.palace}
           </div>
-          <div className="text-[10px] text-gold/70 mt-1 title-display tracking-widest">{m.desc}</div>
+          <div className="text-xs text-rice/80 mt-1">{meaning.desc || data.desc}</div>
         </div>
-      </div>
-
-      {/* 三爻展示 */}
-      <ScrollCard className="rounded-lg p-3" accent="gold">
-        <div className="text-[10px] text-gold/70 title-display tracking-widest text-center mb-2">
-          上 爻 / 中 爻 / 下 爻
-        </div>
-        <div className="space-y-2">
-          {[
-            { name: '上 爻（起始）', value: data.upper },
-            { name: '中 爻（加日）', value: data.middle },
-            { name: '下 爻（加时辰）', value: data.lower, current: true },
-          ].map((row, i) => (
-            <div key={i} className={`flex items-center gap-2 p-2 rounded ${row.current ? 'bg-vermilion/10 border border-vermilion/40' : 'border border-gold/10'}`}>
-              <span className={`text-xs title-display tracking-widest ${row.current ? 'text-vermilion' : 'text-gold/70'}`}>
-                {row.name}
-              </span>
-              <span className="flex-1" />
-              <span className={`text-sm font-bold title-display tracking-widest ${row.current ? 'text-vermilion' : 'text-gold-bright'}`}>
-                {row.value}
-              </span>
+        <div className="grid grid-cols-3 gap-2">
+          {steps.map(s => (
+            <div key={s.label} className="text-center p-2 rounded bg-ink-soft/50 border border-gold/20">
+              <div className="text-[9px] text-gold/50 title-display tracking-widest">{s.label}</div>
+              <div className="text-sm text-gold-bright font-bold title-display mt-1">{s.value}</div>
             </div>
           ))}
         </div>
       </ScrollCard>
 
-      {/* 解读 */}
-      <ScrollCard className="rounded-lg p-4" accent="gold">
-        <div className="flex items-center gap-2 mb-2">
-          <Spark size={20} className="text-vermilion" />
-          <div className="text-base text-gold-bright font-bold title-display tracking-widest">课 象 解 读</div>
+      <ScrollCard className="rounded-lg p-3 space-y-2" accent="gold">
+        <div className="flex items-center gap-2">
+          <Spark size={16} className="text-gold-bright" />
+          <span className="text-sm text-gold-bright font-bold title-display tracking-widest">本 地 粗 解</span>
         </div>
-        <Divider />
-        <p className="text-sm text-rice leading-loose mb-3">{m.desc}，{data.palace}主事。</p>
-        <div className="grid grid-cols-2 gap-2 text-xs">
-          <Domain label="事 业" content={m.career} color={m.color} />
-          <Domain label="财 运" content={m.wealth} color={m.color} />
-          <Domain label="感 情" content={m.love} color={m.color} />
-          <Domain label="健 康" content={m.health} color={m.color} />
+        <div className="grid grid-cols-2 gap-2 text-[11px] text-rice/90">
+          <div><span className="text-gold/60">事业</span> · {meaning.career}</div>
+          <div><span className="text-gold/60">财运</span> · {meaning.wealth}</div>
+          <div><span className="text-gold/60">感情</span> · {meaning.love}</div>
+          <div><span className="text-gold/60">健康</span> · {meaning.health}</div>
         </div>
       </ScrollCard>
 
-      <div className="p-3 bg-ink-soft/40 border border-gold/20 rounded text-center">
-        <div className="text-[10px] text-gold/70 mb-2 title-display tracking-widest">
-          录 入 完 整 生 辰  ·  解 锁 三 盘 详 批
-        </div>
+      <AiDivinationPanel kind="xiaoLiuRen" payload={data} question={question} />
+
+      <div className="flex gap-2">
+        <button
+          onClick={onBack}
+          className="flex-1 py-2.5 rounded-full border border-gold/30 text-gold text-xs title-display tracking-widest hover:border-gold-bright"
+        >
+          再 起 一 课
+        </button>
         <button
           onClick={onStartInput}
-          className="px-5 py-2 rounded-full bg-vermilion/80 hover:bg-vermilion text-cream text-xs title-display tracking-widest"
+          className="flex-1 py-2.5 rounded-full bg-vermilion/90 text-cream text-xs title-display tracking-widest"
         >
-          录 入 生 辰
+          录入生辰深批
         </button>
       </div>
     </div>
   );
 }
 
-function Domain({ label, content, color }: { label: string; content: string; color?: string }) {
-  return (
-    <div className="p-2 rounded border" style={{ borderColor: (color || '#c8a45c') + '40', background: (color || '#c8a45c') + '10' }}>
-      <div className="text-[9px] text-gold/70 title-display tracking-widest mb-1" style={{ color: color }}>{label}</div>
-      <div className="text-[11px] text-rice leading-relaxed">{content}</div>
-    </div>
-  );
-}
-
-/** 卦象三爻（从下到上） */
 function BaguaGua({ lines, color = '#c8a45c' }: { lines: number[]; color?: string }) {
   return (
-    <div className="flex flex-col-reverse gap-1">
-      {[0, 1, 2].map((i) => {
-        const isYang = lines[i] === 1;
-        return (
-          <div key={i} className="w-8 h-1.5" style={{ background: color, opacity: 0.85, boxShadow: `0 0 4px ${color}88` }}>
-            {isYang ? null : <div className="w-full h-full flex"><div className="w-1/3 bg-ink" /></div>}
-          </div>
-        );
-      })}
+    <div className="flex flex-col-reverse gap-1 items-center">
+      {lines.map((l, i) => (
+        <div key={i} className="flex items-center gap-1">
+          {l === 1 ? (
+            <div className="w-10 h-1.5 rounded-sm" style={{ background: color }} />
+          ) : (
+            <>
+              <div className="w-4 h-1.5 rounded-sm" style={{ background: color }} />
+              <div className="w-4 h-1.5 rounded-sm" style={{ background: color }} />
+            </>
+          )}
+        </div>
+      ))}
     </div>
   );
 }

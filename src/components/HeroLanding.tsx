@@ -8,7 +8,7 @@
 import { useState } from 'react';
 import { Divider } from './Ornament';
 import { Taiji, Scroll, Coin, Bagua, Hourglass, ArrowRight } from './Icon';
-import { castMeiHua, coinToNumbers } from '../lib/divination';
+import { castMeiHua, castXiaoLiuRen, coinToNumbers } from '../lib/divination';
 import type { HistoryRecord } from '../lib/store';
 import { SHI_CHEN } from '../lib/lunar';
 
@@ -62,7 +62,7 @@ export function HeroLanding({ records, onLoadRecord, onDeleteRecord, onStartInpu
         setCoinFaces(final);
         const [n1, n2, n3] = coinToNumbers(final);
         const result = castMeiHua(n1, n2, n3);
-        onDivination({ type: 'meiHua', data: result, question: '随机摇卦' });
+        onDivination({ type: 'meiHua', data: result, question: question || '抛硬币起卦' });
       }
     }, 80);
   }
@@ -79,20 +79,15 @@ export function HeroLanding({ records, onLoadRecord, onDeleteRecord, onStartInpu
   function handleXiaoLiuRen(date: Date, hourIndex: number) {
     const month = date.getMonth() + 1;
     const day = date.getDate();
-    // 简单小六壬
-    const start = (month - 1) % 6;
-    const mid = (start + (day - 1)) % 6;
-    const lower = (mid + hourIndex) % 6;
-    const XL = ['大安', '留连', '速喜', '赤口', '小吉', '空亡'];
-    const palace = XL[lower];
+    const cast = castXiaoLiuRen(month, day, hourIndex);
     onDivination({
       type: 'xiaoLiuRen',
       data: {
-        upper: XL[start],
-        middle: XL[mid],
-        lower: XL[lower],
-        palace,
-        month, day, hour: SHI_CHEN[hourIndex]?.name,
+        ...cast,
+        month,
+        day,
+        hour: SHI_CHEN[hourIndex]?.name,
+        shiChen: SHI_CHEN[hourIndex]?.name,
         hourIndex,
         date: `${date.getFullYear()}-${date.getMonth() + 1}-${date.getDate()}`,
       },

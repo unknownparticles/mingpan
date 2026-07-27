@@ -145,12 +145,19 @@ export function castMeiHua(n1: number, n2: number, n3: number): MeiHua {
   };
 }
 
-/** 掷三枚硬币自动起卦：硬币按字/背 → 0/1 → 总和 → 爻 */
-export function coinToNumbers(_coins?: Array<'yin' | 'yang'>): [number, number, number] {
-  // 每次掷币爻的生成：3 阳=老阳(变)9, 2阳1阴=少阳7, 2阴1阳=少阴8, 3阴=老阴(变)6
-  // 但简化：每次给 1-9 的随机数让 sum % 6
-  const n1 = 1 + Math.floor(Math.random() * 9);
-  const n2 = 1 + Math.floor(Math.random() * 9);
-  const n3 = 1 + Math.floor(Math.random() * 9);
+/** 掷三枚硬币自动起卦：阳/阴映射为三数，再交给梅花取卦 */
+export function coinToNumbers(coins?: Array<'yin' | 'yang'>): [number, number, number] {
+  const faces: Array<'yin' | 'yang'> = (coins && coins.length >= 3)
+    ? coins.slice(0, 3)
+    : [
+        Math.random() < 0.5 ? 'yin' : 'yang',
+        Math.random() < 0.5 ? 'yin' : 'yang',
+        Math.random() < 0.5 ? 'yin' : 'yang',
+      ];
+  // 阳=1 阴=0；三枚硬币组成 0-7，再 +1 对应 1-8 卦序
+  const bits = faces.map(f => (f === 'yang' ? 1 : 0));
+  const n1 = bits[0] * 4 + bits[1] * 2 + bits[2] + 1; // 上卦源
+  const n2 = bits[2] * 4 + bits[1] * 2 + bits[0] + 1; // 下卦源（位序倒置）
+  const n3 = bits.reduce((s: number, b) => s + b, 0) + 1; // 动爻源 1-4，再与上下卦合成
   return [n1, n2, n3];
 }
