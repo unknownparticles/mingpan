@@ -92,11 +92,14 @@ ${tableLines}
       { key: 'event', label: '事项类型', type: 'select', options: ['婚嫁', '搬家', '开业', '签约', '出行', '动土', '祭祀'] },
       { key: 'range', label: '择日范围（近 N 天）', type: 'text', placeholder: '如 30' },
     ],
-    buildPrompt: (info) => ({
-      system: '你是精通择日的命理大师，结合八字喜忌、神煞宜忌、黄历宜忌，给出具体吉日推荐。',
-      user: `【生辰】${info.birthStr}  性别：${info.gender}
-【事项】${info.event}
-【范围】未来 ${info.range} 天内
+    buildPrompt: (info) => {
+      const rangeDays = Math.max(1, Math.min(365, Number.parseInt(String(info.range || '30'), 10) || 30));
+      return {
+        system: '你是精通择日的命理大师，结合八字喜忌、神煞宜忌、黄历宜忌，给出具体吉日推荐。所有日期必须以用户提供的当前浏览器时间为基准，禁止使用过时年份。',
+        user: `【生辰】${info.birthStr}  性别：${info.gender}
+【当前时间】${info.nowStr}（以浏览器本地时间为准，当前年份=${info.nowYear}）
+【事项】${info.event || '通用'}
+【范围】从今天起未来 ${rangeDays} 天内（约至 ${info.rangeEndStr}）
 
 请列出 3-5 个最合适的吉日，按以下格式：
 
@@ -109,13 +112,14 @@ ${tableLines}
 - **理由**：...
 - **时辰**：建议 XX 时（最吉）
 
-[推荐 3-5 天]
+[推荐 3-5 天；日期必须落在 ${info.nowYear} 年及之后的真实公历日期，禁止出现 2023 等过时年份]
 
 # 三、避忌日期
-[列出 2-3 个绝对要避开的日期和原因]
+[列出 2-3 个绝对要避开的日期和原因；同样必须基于当前时间]
 
 总字数 600-800。`,
-    }),
+      };
+    },
   },
   {
     id: 'fortune',
@@ -128,14 +132,15 @@ ${tableLines}
       { key: 'period', label: '时间粒度', type: 'select', options: ['年', '月', '日', '时'] },
     ],
     buildPrompt: (info) => ({
-      system: '你是精通紫微斗数、八字、奇门遁甲的命理大师，专长运势分析。',
+      system: '你是精通紫微斗数、八字、奇门遁甲的命理大师，专长运势分析。所有时间表述必须以用户提供的当前浏览器时间为基准。',
       user: `【生辰】${info.birthStr}  性别：${info.gender}
-【粒度】${info.period}
+【当前时间】${info.nowStr}（以浏览器本地时间为准，当前年份=${info.nowYear}）
+【粒度】${info.period || '月'}
 
-请基于命盘进行**${info.period}**运势分析：
+请基于命盘，围绕**当前时间之后**的**${info.period || '月'}**运势分析：
 
-# 一、${info.period}运势总评
-[200字以内：综合分析该${info.period}的整体运势]
+# 一、${info.period || '月'}运势总评
+[200字以内：综合分析该${info.period || '月'}的整体运势]
 
 # 二、五大领域
 - ## 事业：分析此期事业运
@@ -145,10 +150,10 @@ ${tableLines}
 - ## 人际：分析此期人际
 
 # 三、吉日/吉时
-[列出该${info.period}内最适合行动的具体日期/时辰]
+[列出该${info.period || '月'}内最适合行动的具体日期/时辰；年份必须使用 ${info.nowYear} 及之后]
 
 # 四、注意事项
-[列出该${info.period}需特别注意避免的事]
+[列出该${info.period || '月'}需特别注意避免的事]
 
 总字数 800-1200。`,
     }),
@@ -424,11 +429,21 @@ export function ToolSquare({ date, shiChenIndex, gender }: Props) {
 
   const buildInfo = () => {
     const dateInfo = `${date.getFullYear()}年${date.getMonth() + 1}月${date.getDate()}日 ${date.getHours()}时`;
+    const now = new Date();
+    const pad = (n: number) => String(n).padStart(2, '0');
+    const nowStr = `${now.getFullYear()}年${now.getMonth() + 1}月${now.getDate()}日 ${pad(now.getHours())}:${pad(now.getMinutes())}`;
+    const rangeDays = Math.max(1, Math.min(365, Number.parseInt(String(inputs.range || '30'), 10) || 30));
+    const rangeEnd = new Date(now.getTime() + rangeDays * 24 * 60 * 60 * 1000);
+    const rangeEndStr = `${rangeEnd.getFullYear()}年${rangeEnd.getMonth() + 1}月${rangeEnd.getDate()}日`;
     return {
       date,
       shiChenIndex,
       gender,
       birthStr: dateInfo,
+      now,
+      nowYear: now.getFullYear(),
+      nowStr,
+      rangeEndStr,
       fiveClass: (astrolabe as any).fiveElementsClass,
       mingStars,
       wealthStars,
@@ -457,8 +472,14 @@ export function ToolSquare({ date, shiChenIndex, gender }: Props) {
     const t2 = setTimeout(() => setLoadingStage(2), 1500);
     const t3 = setTimeout(() => setLoadingStage(3), 2400);
     try {
-      const { system, user } = tool.buildPrompt(buildInfo());
-      const cacheKey = `${tool.id}-${JSON.stringify(inputs)}-${partnerDate.date}-${partnerDate.gender}`;
+      const info = buildInfo();
+      const { system, user } = tool.buildPrompt(info);
+      // 择日/运势依赖浏览器当前时间，缓存键必须带上“今天”，避免跨天复用旧年份结果
+      const timeSensitive = tool.id === 'dateSelect' || tool.id === 'fortune';
+      const todayKey = `${info.now.getFullYear()}-${info.now.getMonth() + 1}-${info.now.getDate()}`;
+      const cacheKey = timeSensitive
+        ? `${tool.id}-${todayKey}-${JSON.stringify(inputs)}-${partnerDate.date}-${partnerDate.gender}`
+        : `${tool.id}-${JSON.stringify(inputs)}-${partnerDate.date}-${partnerDate.gender}`;
       const { text } = await callLLMWithCache(
         config,
         [{ role: 'user', content: user }],
