@@ -105,12 +105,16 @@ export default function BaziChart({ date, shiChenIndex, gender }: Props) {
         `${title}：${p.full}（${p.naYin}）| 十神 ${p.shiShenGan}/${p.shiShenZhi} | 藏干 ${p.hideGan.join('、')} | 十二长生 ${p.diShi}`
       ).join('\n');
       const daYunStr = bz.daYunList.map(dy => `${dy.startAge}岁 ${dy.ganZhi}`).join(' / ');
+      const now = new Date();
+      const nowYear = now.getFullYear();
+      const nowStr = `${nowYear}年${now.getMonth() + 1}月${now.getDate()}日`;
       const prompt = `八字：${bz.year.full} ${bz.month.full} ${bz.day.full} ${bz.time.full}
 日主：${bz.dayMaster}（${dayMasterWuxing}）
 ${pillarsStr}
 起运：${bz.startAge}岁（${bz.direction}排）${bz.startYear}年
 大运：${daYunStr}
 神煞：${bz.shenSha.join('、')}
+当前时间：${nowStr}（浏览器本地时间，当前年份=${nowYear}）
 
 【输出格式】严格按以下 4 段，每段用 ==== 分隔，首行 # 标题：
 
@@ -127,7 +131,7 @@ ${pillarsStr}
 ====
 
 # 三、大运流年走势
-[250字以内：根据${bz.startAge}岁起运和前几步大运，解读人生各阶段走势]
+[250字以内：根据${bz.startAge}岁起运和前几步大运，解读人生各阶段走势；若写具体流年，以 ${nowYear} 年为当前锚点，禁止过时年份]
 
 ====
 
@@ -140,7 +144,7 @@ ${pillarsStr}
         config,
         [{ role: 'user', content: prompt }],
         { date: `${date.getFullYear()}-${date.getMonth() + 1}-${date.getDate()}`, shiChen: shiChenIndex, gender },
-        'bazi-整体解读',
+        `bazi-整体解读-${nowYear}`,
         'bazi',
         SYSTEM_PROMPT_BAZI,
       );

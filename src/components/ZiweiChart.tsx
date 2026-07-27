@@ -341,6 +341,7 @@ export default function ZiweiChart({ date, shiChenIndex, gender, lunarLeap }: Pr
       const prompt = `出生：${date.getFullYear()}年${date.getMonth() + 1}月${date.getDate()}日 ${shiChenIndex}时 性别${gender} 流派：${SCHOOL_NAMES[school]}
 五行局：${(astrolabe as any).fiveElementsClass}
 运势档位：${horoScope === 'natal' ? '本命' : horoScope === 'decade' ? '大限' : horoScope === 'yearly' ? '流年' : '流月'}
+解读年份/月份：${horoYear}年${horoScope === 'monthly' ? `${horoMonth}月` : ''}（以浏览器可选当前时间/用户选择为准）
 当前解读宫位：${selectedPalace}宫（${PALACE_MEANING[selectedPalace] || ''}）
 
 【三方四正】
@@ -1237,7 +1238,7 @@ function buildOverallPrompt(horo: any, horoScope: string, year: number, month: n
 ====
 
 # 四、关键月份/事件
-[150字以内：列出该期需要重点关注的 2-3 个月份或时间节点]
+[150字以内：列出该期需要重点关注的 2-3 个月份或时间节点；年份必须使用 ${year || new Date().getFullYear()}，禁止过时年份]
 
 ====
 

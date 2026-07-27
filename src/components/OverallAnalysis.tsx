@@ -90,7 +90,7 @@ export default function OverallAnalysis({ date, shiChenIndex, gender }: Props) {
 公历：${date.getFullYear()}年${date.getMonth() + 1}月${date.getDate()}日 ${date.getHours()}时
 ${data.info.yearGZ.full}年 ${data.info.monthGZ.full}月 ${data.info.dayGZ.full}日 ${data.info.hourGZ.full}时
 性别：${gender}  流派：${SCHOOL_NAMES[school]}  五行局：${(data.astrolabe as any).fiveElementsClass}
-当前年份：${currentYear}年
+当前时间：以浏览器本地时间为准，当前年份=${currentYear}年（流年/关键年份必须基于此，禁止过时年份）
 
 【紫微盘】命宫主星：${mingStars}
 财帛宫：${wealStars}  官禄宫：${careerStars}  夫妻宫：${marryStars}
@@ -232,7 +232,7 @@ ${userQ ? `[350字以内：直接回答用户问题，要给具体年份/时间�
 
     try {
       const { system, user } = buildPrompt(userQ);
-      const q = userQ?.trim() || '综合解读';
+      const q = `${userQ?.trim() || '综合解读'}@${currentYear}`;
       const { text, cached } = await callLLMWithCache(
         config,
         [{ role: 'user', content: user }],

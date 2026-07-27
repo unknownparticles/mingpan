@@ -48,9 +48,10 @@ const TOOLS: Tool[] = [
       const data = generateKLineData(info.date, info.shiChenIndex, info.gender);
       const tableLines = data.data.map(p => `${p.age}|${p.health}|${p.wealth}|${p.career}|${p.marriage}`).join('\n');
       return {
-        system: '你是精通紫微斗数、八字、奇门遁甲的命理大师，融合三盘交叉分析人生运势曲线。解读专业、温和、有理有据。',
+        system: '你是精通紫微斗数、八字、奇门遁甲的命理大师，融合三盘交叉分析人生运势曲线。解读专业、温和、有理有据。年份必须按生年+年龄推算，并结合当前时间。',
         user: `【生辰】${info.birthStr}  性别：${info.gender}
 【生年】${data.birthYear}
+【当前时间】${info.nowStr}（浏览器本地时间，当前年份=${info.nowYear}）
 
 【K 线数据表（年龄|健康|财运|官运|姻缘，满分 100）】
 ${tableLines}
@@ -67,12 +68,13 @@ ${tableLines}
 - ## 姻缘/感情：分 3-5 个阶段描述重点
 
 # 三、关键节点
-- ## 高点（顺运期）：列出 5 个具体年份，说明原因
-- ## 低点（逆境期）：列出 5 个具体年份，说明风险
+- ## 高点（顺运期）：列出 5 个具体公历年份（=生年+年龄-1），说明原因
+- ## 低点（逆境期）：列出 5 个具体公历年份，说明风险
 - ## 转折点：列出 3 个可能改变轨迹的关键年
+- 所有年份必须与 K 线年龄对应，禁止编造与生年无关的过时年份
 
 # 四、人生建议
-- ## 事业方向：适合的行业与时机
+- ## 事业方向：适合的行业与时机（相对当前 ${info.nowYear} 年）
 - ## 财富策略：投资理财建议
 - ## 婚姻时机：何时宜动婚嫁
 - ## 养生重点：何时需特别关注健康
@@ -166,8 +168,9 @@ ${tableLines}
     short: '命格精解',
     desc: '紫微斗数 + 八字 + 奇门 三盘精解',
     buildPrompt: (info) => ({
-      system: '你是精通三盘交叉的命理大师，从紫微、八字、奇门三个维度全方位解读命盘。',
+      system: '你是精通三盘交叉的命理大师，从紫微、八字、奇门三个维度全方位解读命盘。涉及年份时必须以用户提供的当前时间为锚点。',
       user: `【生辰】${info.birthStr}  性别：${info.gender}
+【当前时间】${info.nowStr}（浏览器本地时间，当前年份=${info.nowYear}）
 【命盘主星】${info.mingStars}
 【财星】${info.wealthStars}
 【学业星】${info.studyStars}
@@ -190,7 +193,7 @@ ${tableLines}
 [200字：根据${info.fortuneStars}分析时运特点]
 
 # 五、一生轨迹
-[300字：分阶段描述人生重要节点]
+[300字：分阶段描述人生重要节点；若写具体年份，须基于生辰与当前 ${info.nowYear} 年推算]
 
 # 六、修行建议
 [200字：给出命格补益的方向]
@@ -206,8 +209,9 @@ ${tableLines}
     short: '评估财富承载力',
     desc: '从财星、偏财运、投资偏好全面评估',
     buildPrompt: (info) => ({
-      system: '你是精通财富分析的命理大师，专长从命盘评估财富格局。',
+      system: '你是精通财富分析的命理大师，专长从命盘评估财富格局。涉及年份时必须以用户提供的当前浏览器时间为锚点。',
       user: `【生辰】${info.birthStr}  性别：${info.gender}
+【当前时间】${info.nowStr}（浏览器本地时间，当前年份=${info.nowYear}）
 【财星】${info.wealthStars}
 【日主】${info.dayMaster}
 【奇门值符】${info.fortuneStars}
@@ -221,10 +225,10 @@ ${tableLines}
 [200字：最适合的求财方式（创业/职场/投资/技艺）]
 
 # 三、关键财运年份
-[200字：列出 3-5 个财运最佳的年份及原因]
+[200字：列出 3-5 个财运最佳的公历年份及原因；优先 ${info.nowYear} 年起未来 10 年内，禁止过时年份]
 
 # 四、破财风险
-[200字：列出 2-3 个需特别谨慎的年份]
+[200字：列出 2-3 个需特别谨慎的公历年份；同样基于当前时间]
 
 # 五、投资方向
 [200字：根据五行喜忌给出具体投资建议]
@@ -317,10 +321,11 @@ ${tableLines}
     desc: '与伴侣的命格契合度 + 关系走向',
     needPartner: true,
     buildPrompt: (info) => ({
-      system: '你是姻缘匹配的命理大师，从八字用神、紫微夫妻宫、奇门值符三个维度分析两人关系。',
+      system: '你是姻缘匹配的命理大师，从八字用神、紫微夫妻宫、奇门值符三个维度分析两人关系。涉及时间节点必须以用户提供的当前浏览器时间为锚点。',
       user: `【你】${info.birthStr} 性别：${info.gender}
 【TA】${info.partnerStr} 性别：${info.partnerGender}
 【你的日主】${info.dayMaster}
+【当前时间】${info.nowStr}（浏览器本地时间，当前年份=${info.nowYear}）
 
 请进行深度姻缘解析：
 
@@ -337,10 +342,10 @@ ${tableLines}
 [200字：相处模式的具体建议]
 
 # 五、关系走向
-[300字：未来 3-5 年两人关系的大致走向]
+[300字：自 ${info.nowYear} 年起未来 3-5 年两人关系的大致走向]
 
 # 六、重要节点
-[200字：两人关系的关键节点（订婚/婚期/危机等）]
+[200字：两人关系的关键节点（订婚/婚期/危机等）；须写具体公历年份，禁止过时年份]
 
 总字数 1400-1600。`,
     }),
@@ -357,11 +362,12 @@ ${tableLines}
       { key: 'industry', label: '行业', type: 'text', placeholder: '如 互联网/金融/制造业' },
     ],
     buildPrompt: (info) => ({
-      system: '你是事业合作关系的命理分析师，从命格互补、五行生克两个维度评估合作潜力。',
+      system: '你是事业合作关系的命理分析师，从命格互补、五行生克两个维度评估合作潜力。涉及时机必须以用户提供的当前浏览器时间为锚点。',
       user: `【你】${info.birthStr} 性别：${info.gender}
 【TA】${info.partnerStr} 性别：${info.partnerGender}
-【行业】${info.industry}
+【行业】${info.industry || '未指定'}
 【你的日主】${info.dayMaster}
+【当前时间】${info.nowStr}（浏览器本地时间，当前年份=${info.nowYear}）
 
 请进行事业合作分析：
 
@@ -378,7 +384,7 @@ ${tableLines}
 [200字：容易产生分歧/冲突的方面]
 
 # 五、合作时机
-[300字：最佳合作启动/扩大/收尾时机]
+[300字：最佳合作启动/扩大/收尾时机；须写 ${info.nowYear} 年及之后的具体年份/月份]
 
 # 六、长线建议
 [200字：长期合作关系的经营建议]
@@ -474,12 +480,16 @@ export function ToolSquare({ date, shiChenIndex, gender }: Props) {
     try {
       const info = buildInfo();
       const { system, user } = tool.buildPrompt(info);
-      // 择日/运势依赖浏览器当前时间，缓存键必须带上“今天”，避免跨天复用旧年份结果
-      const timeSensitive = tool.id === 'dateSelect' || tool.id === 'fortune';
+      // 涉及“当前/未来年份”的工具，缓存键必须带上当前年（择日/运势再细到天），避免复用过时年份结果
+      const daySensitive = tool.id === 'dateSelect' || tool.id === 'fortune';
+      const yearSensitive = daySensitive || tool.id === 'wealth' || tool.id === 'marriage' || tool.id === 'career' || tool.id === 'coreChart' || tool.id === 'kline';
       const todayKey = `${info.now.getFullYear()}-${info.now.getMonth() + 1}-${info.now.getDate()}`;
-      const cacheKey = timeSensitive
+      const yearKey = String(info.nowYear);
+      const cacheKey = daySensitive
         ? `${tool.id}-${todayKey}-${JSON.stringify(inputs)}-${partnerDate.date}-${partnerDate.gender}`
-        : `${tool.id}-${JSON.stringify(inputs)}-${partnerDate.date}-${partnerDate.gender}`;
+        : yearSensitive
+          ? `${tool.id}-${yearKey}-${JSON.stringify(inputs)}-${partnerDate.date}-${partnerDate.gender}`
+          : `${tool.id}-${JSON.stringify(inputs)}-${partnerDate.date}-${partnerDate.gender}`;
       const { text } = await callLLMWithCache(
         config,
         [{ role: 'user', content: user }],
