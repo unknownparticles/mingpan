@@ -298,15 +298,11 @@ export function generateKLineData(
   const astrolabe = astro.bySolar(dateStr, shiChenIndex, gender, false, 'zh-CN');
   const bazi = getBazi(date, shiChenIndex, gender);
 
-  // 每 5 岁一个点 → 1, 6, 11, ..., 96 (20 个点)
+  // 每年一个节点 → 1..100 岁，便于缩放后逐点查看评分
   const data: DataPoint[] = [];
-  for (let age = 1; age <= 100; age += 5) {
+  for (let age = 1; age <= 100; age += 1) {
     const year = birthYear + age - 1;
     data.push(calcPoint(age, year, astrolabe, bazi, shiChenIndex, birthYear));
-  }
-  // 补 100 岁
-  if (data[data.length - 1].age !== 100) {
-    data.push(calcPoint(100, birthYear + 99, astrolabe, bazi, shiChenIndex, birthYear));
   }
 
   const dims: Dimension[] = ['health', 'wealth', 'career', 'marriage'];
@@ -319,17 +315,36 @@ export function generateKLineData(
   return { birthYear, data, series, astrolabe, bazi };
 }
 
+export function clampAge(age: number): number {
+  return Math.max(1, Math.min(100, Math.round(age)));
+}
+
+export function findPointByAge(data: DataPoint[], age: number): DataPoint {
+  const a = clampAge(age);
+  return data.find((p) => p.age === a) || data[Math.max(0, Math.min(data.length - 1, a - 1))];
+}
+
+/** 分数档位文案 */
+export function scoreLevel(v: number): string {
+  if (v >= 85) return '极旺';
+  if (v >= 70) return '偏旺';
+  if (v >= 55) return '平稳';
+  if (v >= 40) return '偏弱';
+  return '低迷';
+}
+
 export function summarizePoint(series: DimensionSeries[], age: number) {
-  // 找到最近的 age 索引（5 间隔）
-  const idx = Math.round((age - 1) / 5);
+  // 每年一点：索引 = age - 1
+  const idx = clampAge(age) - 1;
   return series.map((s) => {
-    const cur = s.values[Math.min(idx, s.values.length - 1)] || 50;
+    const cur = s.values[Math.min(idx, s.values.length - 1)] ?? 50;
     const prev = s.values[Math.max(0, idx - 1)] ?? cur;
     const change = cur - prev;
     return {
       dim: s.dim,
       value: cur,
-      trend: Math.abs(change) < 2 ? 'flat' : change > 0 ? 'up' : 'down',
+      level: scoreLevel(cur),
+      trend: Math.abs(change) < 2 ? 'flat' as const : change > 0 ? 'up' as const : 'down' as const,
       change,
     };
   });

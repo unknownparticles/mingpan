@@ -49,7 +49,7 @@ const TOOLS: Tool[] = [
     accent: 'vermilion',
     title: '人生 K 线',
     short: '1-100岁 4 维运势图谱',
-    desc: '生成 1-100 岁 4 维度走势图，可缩放/点击点位，辅以大师详解',
+    desc: '1-100 岁逐年节点，支持缩放平移、查看评分，并解析任意年份',
     buildPrompt: (info) => {
       const data = generateKLineData(info.date, info.shiChenIndex, info.gender);
       const tableLines = data.data.map(p => `${p.age}|${p.health}|${p.wealth}|${p.career}|${p.marriage}`).join('\n');
@@ -425,6 +425,8 @@ export function ToolSquare({ date, shiChenIndex, gender }: Props) {
   const [localResult, setLocalResult] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [loadingStage, setLoadingStage] = useState(0);
+  const [nodeAnalyzing, setNodeAnalyzing] = useState(false);
+  const [nodeLabel, setNodeLabel] = useState<string | null>(null);
 
   const tool = useMemo(() => TOOLS.find(t => t.id === activeTool), [activeTool]);
 
@@ -656,7 +658,7 @@ export function ToolSquare({ date, shiChenIndex, gender }: Props) {
               </div>
             </div>
             <button
-              onClick={() => { setActiveTool(null); setResult(null); setLocalResult(null); setInputs({}); }}
+              onClick={() => { setActiveTool(null); setResult(null); setLocalResult(null); setInputs({}); setNodeAnalyzing(false); setNodeLabel(null); }}
               className="text-[10px] text-gold/60 hover:text-gold-bright tracking-widest title-display px-2 py-1 border border-gold/20 rounded"
             >← 返 回</button>
           </div>
@@ -724,66 +726,85 @@ export function ToolSquare({ date, shiChenIndex, gender }: Props) {
             {loading ? <span className="inline-flex items-center justify-center gap-2"><span>✦</span> 大师解读中…</span> : <span className="inline-flex items-center justify-center gap-2">开始 {tool.title}</span>}
           </button>
 
-          {/* K 线动画：仅 kline 工具且不 loading 时显示 */}
-          {tool.id === 'kline' && !loading && !result && (
+          {/* 人生 K 线：始终可交互（缩放/选点/评分），解析时不隐藏 */}
+          {tool.id === 'kline' && (
             <div className="mt-3">
               <KLineAnim
                 date={date}
                 shiChenIndex={shiChenIndex}
                 gender={gender}
-                onSelectPoint={async (age) => {
+                analyzing={nodeAnalyzing}
+                onAnalyzePoint={async (age) => {
                   const config = loadAIConfig();
                   if (!canUseAI(config)) {
                     setResult(getAIGateMessage(config));
                     return;
                   }
-                  setLoading(true);
+                  setNodeAnalyzing(true);
                   setLoadingStage(0);
-                  const t1 = setTimeout(() => setLoadingStage(1), 600);
-                  const t2 = setTimeout(() => setLoadingStage(2), 1500);
-                  const t3 = setTimeout(() => setLoadingStage(3), 2400);
+                  const t1 = setTimeout(() => setLoadingStage(1), 500);
+                  const t2 = setTimeout(() => setLoadingStage(2), 1200);
+                  const t3 = setTimeout(() => setLoadingStage(3), 2000);
                   try {
-                    const { pointToLLMContext, generateKLineData } = await import('../lib/kline');
-                    const data = generateKLineData(date, shiChenIndex, gender);
-                    const point = data.data.find(p => p.age === age) || data.data[0];
-                    const ctx = pointToLLMContext(point,
+                    const { pointToLLMContext, generateKLineData, findPointByAge } = await import('../lib/kline');
+                    const kdata = generateKLineData(date, shiChenIndex, gender);
+                    const point = findPointByAge(kdata.data, age);
+                    setNodeLabel(`${point.year}年 · ${point.age}岁 · ${point.ganZhi}`);
+                    const ctx = pointToLLMContext(
+                      point,
                       `${date.getFullYear()}-${date.getMonth() + 1}-${date.getDate()}`,
-                      gender);
+                      gender,
+                    );
+                    const nowY = new Date().getFullYear();
                     const { text } = await callLLMWithCache(
                       config,
                       [{ role: 'user', content: ctx + `
 
-请按以下模块进行专业解读（总字数 600-800）：
+【当前时间锚点】浏览器年份=${nowY}（解读时对照当前年龄=${nowY - kdata.birthYear + 1}岁左右）
 
-# 一、${point.year} 年（${point.ganZhi}）总评
-[200字：综合该年的四化影响与四维分数]
+请按以下模块进行专业解读（总字数 600-900）：
+
+# 一、${point.year} 年（${point.ganZhi} · ${point.age}岁）总评
+[综合该年四化与四维分数，对照当前时间说明处于人生何阶段]
 
 # 二、四维详解
-- ## 健康：分析该年健康运
-- ## 财运：分析该年财运
-- ## 官运/事业：分析该年事业
-- ## 姻缘/感情：分析该年感情
+- ## 健康：${point.health} 分
+- ## 财运：${point.wealth} 分
+- ## 官运/事业：${point.career} 分
+- ## 姻缘/感情：${point.marriage} 分
 
 # 三、关键提示
-[150字：该年最需要注意的 2-3 件事]
+[该年最需要注意的 2-3 件事]
 
 # 四、当年开运建议
-[150字：颜色、方位、活动建议]` }],
+[颜色、方位、行动建议]
+
+要求：分数与年份必须与本地节点一致，不得改写。` }],
                       { date: `${date.getFullYear()}-${date.getMonth() + 1}-${date.getDate()}`, shiChen: shiChenIndex, gender },
-                      `kline-年解读-${point.year}-${point.ganZhi}`,
+                      `kline-年解读-v2-${point.year}-${point.ganZhi}-${point.age}`,
                       'kline-year',
-                      '你是精通紫微斗数、八字、奇门遁甲的命理大师，针对某一年进行专业详尽解读。',
+                      '你是精通紫微斗数、八字、奇门遁甲的命理大师，针对人生K线某一年龄节点做专业详尽解读。只能基于给定分数与四化，不得篡改数据。',
                     );
                     setResult(typeof text === 'string' ? text : (text as any)?.text || String(text));
                   } catch (e: any) {
                     setResult(`❌ ${e.message || '请求失败'}`);
                   } finally {
                     clearTimeout(t1); clearTimeout(t2); clearTimeout(t3);
-                    setLoading(false);
+                    setNodeAnalyzing(false);
                     setLoadingStage(0);
                   }
                 }}
               />
+            </div>
+          )}
+
+          {/* 节点解析 loading：不隐藏 K 线 */}
+          {tool.id === 'kline' && nodeAnalyzing && (
+            <div className="mt-2">
+              <LoadingStages stage={loadingStage} />
+              <div className="text-[10px] text-gold/60 text-center mt-1 title-display tracking-widest">
+                正在解析节点{nodeLabel ? ` · ${nodeLabel}` : ''}…
+              </div>
             </div>
           )}
 
@@ -820,7 +841,7 @@ export function ToolSquare({ date, shiChenIndex, gender }: Props) {
                     大 师 详 解
                   </div>
                   <div className="text-[9px] text-gold/60 title-display tracking-widest mt-0.5">
-                    {tool.title} · 奉 上 解 读
+                    {tool.title}{nodeLabel ? ` · ${nodeLabel}` : ''} · 奉 上 解 读
                   </div>
                 </div>
                 <span className="text-[8px] text-gold/40 title-display tracking-widest">
