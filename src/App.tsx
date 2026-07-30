@@ -137,11 +137,11 @@ export default function App() {
   }
 
   return (
-    <div className="min-h-screen max-w-md mx-auto px-3 py-4 flex flex-col relative">
+    <div className="app-shell max-w-md mx-auto flex flex-col relative">
       <BackgroundLayer />
 
       {/* 顶部 Logo 区 */}
-      <header className="relative flex items-center justify-between mb-3 px-1 pt-1">
+      <header className="relative flex items-center justify-between mb-3 px-1">
         <div className="flex items-center gap-2">
           <div className="relative">
             <div className="absolute inset-0 bg-gold/30 blur-md rounded-xl" />
@@ -216,7 +216,7 @@ export default function App() {
         </div>
       )}
 
-      <main className="flex-1 pb-28">
+      <main className={`flex-1 ${tab === 'settings' ? 'app-main-no-nav' : 'app-main'}`}>
         {tab === 'form' && (
           <BirthForm
             onSubmit={handleSubmit}
@@ -298,8 +298,8 @@ export default function App() {
 
       {/* 底部卷轴式导航 */}
       {tab !== 'settings' && (
-        <nav className="fixed bottom-0 left-0 right-0 z-40 pointer-events-none">
-          <div className="max-w-md mx-auto px-3 pb-2">
+        <nav className="app-bottom-nav fixed bottom-0 left-0 right-0 z-40 pointer-events-none">
+          <div className="app-bottom-nav-inner max-w-md mx-auto px-3">
             <div className="relative pointer-events-auto">
               {/* 卷轴背景 */}
               <div

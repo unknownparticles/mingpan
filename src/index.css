@@ -350,3 +350,51 @@ body::after {
   transform-box: fill-box;
   animation: q-center-rotate-rev 15s linear infinite;
 }
+
+/* 安全区：适配刘海 / 状态栏 / Home Indicator（需配合 viewport-fit=cover） */
+:root {
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-right: env(safe-area-inset-right, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+  --safe-left: env(safe-area-inset-left, 0px);
+  --app-nav-clearance: 7rem;
+}
+
+.app-shell {
+  min-height: 100dvh;
+  min-height: 100svh;
+  box-sizing: border-box;
+  padding-top: calc(1rem + var(--safe-top));
+  padding-right: max(0.75rem, calc(0.75rem + var(--safe-right)));
+  padding-bottom: max(1rem, var(--safe-bottom));
+  padding-left: max(0.75rem, calc(0.75rem + var(--safe-left)));
+}
+
+.app-main {
+  /* 为底部固定导航 + Home Indicator 留出滚动空间 */
+  padding-bottom: calc(var(--app-nav-clearance) + var(--safe-bottom));
+}
+
+.app-main-no-nav {
+  padding-bottom: 0.5rem;
+}
+
+.app-bottom-nav {
+  /* 底栏贴底，内容抬到安全区之上；背景延伸到 Home Indicator */
+  padding-bottom: var(--safe-bottom);
+  padding-left: var(--safe-left);
+  padding-right: var(--safe-right);
+  background: linear-gradient(to top, rgba(10, 6, 6, 0.96) 0%, rgba(10, 6, 6, 0.85) 55%, transparent 100%);
+}
+
+.app-bottom-nav-inner {
+  padding-bottom: 0.5rem;
+}
+
+.app-safe-modal {
+  padding-top: max(1rem, var(--safe-top));
+  padding-right: max(1rem, var(--safe-right));
+  padding-bottom: max(1rem, var(--safe-bottom));
+  padding-left: max(1rem, var(--safe-left));
+}
+
