@@ -1,0 +1,42 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="命盘">
+  <defs>
+    <radialGradient id="bg" cx="50%" cy="42%" r="70%">
+      <stop offset="0%" stop-color="#5a1210"/>
+      <stop offset="55%" stop-color="#1a0a0a"/>
+      <stop offset="100%" stop-color="#060404"/>
+    </radialGradient>
+    <linearGradient id="gold" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#f0d78c"/>
+      <stop offset="45%" stop-color="#c8a45c"/>
+      <stop offset="100%" stop-color="#8a6a2e"/>
+    </linearGradient>
+    <linearGradient id="vermilion" x1="30%" y1="0%" x2="70%" y2="100%">
+      <stop offset="0%" stop-color="#e25548"/>
+      <stop offset="100%" stop-color="#8b1a13"/>
+    </linearGradient>
+  </defs>
+  <!-- full-bleed for maskable safe zone (~80% content) -->
+  <rect width="512" height="512" fill="url(#bg)"/>
+  <g transform="translate(256 248) scale(0.82)">
+    <g fill="none" stroke="url(#gold)" stroke-linecap="round">
+      <circle r="168" stroke-width="6"/>
+      <circle r="148" stroke-width="1.8" opacity="0.5"/>
+      <g stroke-width="3.5">
+        <line x1="0" y1="-178" x2="0" y2="-148"/>
+        <line x1="0" y1="148" x2="0" y2="178"/>
+        <line x1="-178" y1="0" x2="-148" y2="0"/>
+        <line x1="148" y1="0" x2="178" y2="0"/>
+        <line x1="-126" y1="-126" x2="-105" y2="-105"/>
+        <line x1="105" y1="105" x2="126" y2="126"/>
+        <line x1="126" y1="-126" x2="105" y2="-105"/>
+        <line x1="-105" y1="105" x2="-126" y2="126"/>
+      </g>
+    </g>
+    <circle r="78" fill="url(#gold)"/>
+    <path d="M0,-78 A78,78 0 0,1 0,78 A39,39 0 0,1 0,0 A39,39 0 0,0 0,-78 Z" fill="url(#vermilion)"/>
+    <circle cx="0" cy="-39" r="12" fill="url(#vermilion)"/>
+    <circle cx="0" cy="39" r="12" fill="url(#gold)"/>
+    <circle cx="0" cy="-39" r="4.5" fill="url(#gold)"/>
+    <circle cx="0" cy="39" r="4.5" fill="url(#vermilion)"/>
+  </g>
+</svg>

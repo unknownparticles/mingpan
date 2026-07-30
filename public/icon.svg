@@ -1,18 +1,58 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="命盘">
   <defs>
-    <radialGradient id="g" cx="50%" cy="50%" r="50%">
-      <stop offset="0%" stop-color="#c8392f"/>
-      <stop offset="60%" stop-color="#8b1a13"/>
-      <stop offset="100%" stop-color="#0a0606"/>
+    <radialGradient id="bg" cx="50%" cy="42%" r="62%">
+      <stop offset="0%" stop-color="#5a1210"/>
+      <stop offset="55%" stop-color="#1a0a0a"/>
+      <stop offset="100%" stop-color="#060404"/>
     </radialGradient>
+    <linearGradient id="gold" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#f0d78c"/>
+      <stop offset="45%" stop-color="#c8a45c"/>
+      <stop offset="100%" stop-color="#8a6a2e"/>
+    </linearGradient>
+    <linearGradient id="vermilion" x1="30%" y1="0%" x2="70%" y2="100%">
+      <stop offset="0%" stop-color="#e25548"/>
+      <stop offset="100%" stop-color="#8b1a13"/>
+    </linearGradient>
+    <filter id="glow" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur stdDeviation="4" result="b"/>
+      <feMerge>
+        <feMergeNode in="b"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
   </defs>
-  <rect width="256" height="256" rx="40" fill="url(#g)"/>
-  <g fill="none" stroke="#c8a45c" stroke-width="3" stroke-linecap="round">
-    <circle cx="128" cy="128" r="76"/>
-    <line x1="52" y1="128" x2="204" y2="128"/>
-    <line x1="128" y1="52" x2="128" y2="204"/>
-    <line x1="74" y1="74" x2="182" y2="182"/>
-    <line x1="182" y1="74" x2="74" y2="182"/>
+  <!-- app tile -->
+  <rect width="512" height="512" rx="96" fill="url(#bg)"/>
+  <rect x="18" y="18" width="476" height="476" rx="82" fill="none" stroke="url(#gold)" stroke-width="6" opacity="0.55"/>
+
+  <!-- outer compass ring -->
+  <g fill="none" stroke="url(#gold)" stroke-linecap="round" filter="url(#glow)">
+    <circle cx="256" cy="256" r="168" stroke-width="5" opacity="0.95"/>
+    <circle cx="256" cy="256" r="148" stroke-width="1.5" opacity="0.45"/>
+    <!-- 8 directions -->
+    <g stroke-width="3">
+      <line x1="256" y1="78" x2="256" y2="108"/>
+      <line x1="256" y1="404" x2="256" y2="434"/>
+      <line x1="78" y1="256" x2="108" y2="256"/>
+      <line x1="404" y1="256" x2="434" y2="256"/>
+      <line x1="126" y1="126" x2="147" y2="147"/>
+      <line x1="365" y1="365" x2="386" y2="386"/>
+      <line x1="386" y1="126" x2="365" y2="147"/>
+      <line x1="147" y1="365" x2="126" y2="386"/>
+    </g>
   </g>
-  <text x="128" y="142" text-anchor="middle" font-size="56" font-family="serif" fill="#c8a45c" font-weight="700">命</text>
+
+  <!-- taiji -->
+  <g transform="translate(256 256)">
+    <circle r="78" fill="url(#gold)"/>
+    <path d="M0,-78 A78,78 0 0,1 0,78 A39,39 0 0,1 0,0 A39,39 0 0,0 0,-78 Z" fill="url(#vermilion)"/>
+    <circle cx="0" cy="-39" r="12" fill="url(#vermilion)"/>
+    <circle cx="0" cy="39" r="12" fill="url(#gold)"/>
+    <circle cx="0" cy="-39" r="4.5" fill="url(#gold)"/>
+    <circle cx="0" cy="39" r="4.5" fill="url(#vermilion)"/>
+  </g>
+
+  <!-- seal character -->
+  <text x="256" y="455" text-anchor="middle" font-size="42" font-family="Noto Serif SC, Songti SC, STSong, serif" font-weight="700" fill="url(#gold)" letter-spacing="6">命盘</text>
 </svg>

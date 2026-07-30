@@ -7,7 +7,8 @@
  */
 import { useState } from 'react';
 import { Divider } from './Ornament';
-import { Taiji, Scroll, Coin, Bagua, Hourglass, ArrowRight } from './Icon';
+import { Scroll, Coin, Bagua, Hourglass, ArrowRight } from './Icon';
+import { InstallApp } from './InstallApp';
 import { castMeiHua, castXiaoLiuRen, coinToNumbers } from '../lib/divination';
 import type { HistoryRecord } from '../lib/store';
 import { SHI_CHEN } from '../lib/lunar';
@@ -100,23 +101,21 @@ export function HeroLanding({ records, onLoadRecord, onDeleteRecord, onStartInpu
     return (
       <div className="relative min-h-[80vh] flex flex-col items-center justify-center px-3 py-6">
         <div className="relative w-full max-w-sm mx-auto flex flex-col items-center">
-          {/* 太极印章 */}
+          {/* SVG 应用图标印章 */}
           <div className="relative mb-4">
-            <div className="absolute inset-0 rounded-full blur-2xl bg-gold/30 animate-pulse" />
-            <div
-              className="relative w-24 h-24 rounded-full border-2 border-gold/60 flex items-center justify-center"
-              style={{
-                background: 'radial-gradient(circle, #1a1010 0%, #0a0606 100%)',
-                boxShadow: '0 0 30px rgba(200,164,92,0.5), inset 0 0 20px rgba(0,0,0,0.6)',
-              }}
-            >
-              <Taiji size={64} style={{ color: '#c8a45c' }} />
+            <div className="absolute inset-0 rounded-[28px] blur-2xl bg-gold/30 animate-pulse" />
+            <div className="relative w-24 h-24">
+              <img
+                src={`${import.meta.env.BASE_URL}icon.svg`}
+                alt="命盘"
+                className="w-24 h-24 rounded-[28px] border-2 border-gold/60 shadow-[0_0_30px_rgba(200,164,92,0.5)]"
+              />
               <div
-                className="absolute inset-0 rounded-full border border-gold/20 animate-spin"
+                className="absolute inset-0 rounded-[28px] border border-gold/20 animate-spin pointer-events-none"
                 style={{ animationDuration: '20s' }}
               />
               <div
-                className="absolute -inset-2 rounded-full border border-dashed border-gold/15 animate-spin"
+                className="absolute -inset-2 rounded-[32px] border border-dashed border-gold/15 animate-spin pointer-events-none"
                 style={{ animationDuration: '40s', animationDirection: 'reverse' }}
               />
             </div>
@@ -131,10 +130,14 @@ export function HeroLanding({ records, onLoadRecord, onDeleteRecord, onStartInpu
             <span className="h-px w-8 bg-gradient-to-l from-transparent to-gold/60" />
           </div>
 
-          <div className="relative max-w-xs text-center mb-6">
+          <div className="relative max-w-xs text-center mb-4">
             <p className="text-[11px] text-gold/80 title-display tracking-widest leading-loose italic">
               「{quote}」
             </p>
+          </div>
+
+          <div className="w-full mb-4">
+            <InstallApp variant="banner" />
           </div>
 
           {/* 三种起卦入口 */}

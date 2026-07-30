@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import AuthPanel from './AuthPanel';
+import { InstallApp } from './InstallApp';
 import {
   loadAIConfig,
   saveAIConfig,
@@ -141,6 +142,8 @@ export default function Settings({ onClose, onAuthChange }: Props) {
       </div>
 
       <div className="space-y-5">
+        <InstallApp variant="card" />
+
         <section className="rounded border border-gold/20 bg-ink-soft/30 p-3 space-y-2">
           <div className="flex items-center justify-between">
             <h3 className="text-sm text-gold-bright title-display tracking-widest">账 号</h3>

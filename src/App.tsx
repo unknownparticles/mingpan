@@ -9,6 +9,7 @@ import BaziChart from './components/BaziChart';
 import OverallAnalysis from './components/OverallAnalysis';
 import { ToolSquare } from './components/ToolSquare';
 import Settings from './components/Settings';
+import { InstallApp } from './components/InstallApp';
 import LoadingOverlay from './components/LoadingOverlay';
 import { BackgroundLayer, ScrollCard } from './components/Ornament';
 import { Taiji, Luopan, Bazi as BaziIcon, Spark, Gear, Seal, Wrench, Sparkle } from './components/Icon';
@@ -143,10 +144,12 @@ export default function App() {
       <header className="relative flex items-center justify-between mb-3 px-1 pt-1">
         <div className="flex items-center gap-2">
           <div className="relative">
-            <div className="absolute inset-0 bg-gold/30 blur-md rounded-full" />
-            <div className="relative w-9 h-9 rounded-full border border-gold/60 bg-ink/80 flex items-center justify-center shadow-[0_0_12px_rgba(200,164,92,0.4)]">
-              <Taiji size={24} style={{ color: '#c8a45c' }} />
-            </div>
+            <div className="absolute inset-0 bg-gold/30 blur-md rounded-xl" />
+            <img
+              src={`${import.meta.env.BASE_URL}icon.svg`}
+              alt="命盘"
+              className="relative w-9 h-9 rounded-xl border border-gold/60 shadow-[0_0_12px_rgba(200,164,92,0.4)] bg-ink/80"
+            />
           </div>
           <div>
             <h1 className="text-xl text-gold-bright font-bold tracking-[0.4em] title-display leading-none">天 机 命 盘</h1>
@@ -158,6 +161,7 @@ export default function App() {
           </div>
         </div>
         <div className="flex items-center gap-2">
+          <InstallApp variant="compact" className="bg-ink-soft/60 backdrop-blur" />
           <button
             onClick={() => switchTab('settings')}
             className="relative max-w-[7.5rem] h-9 px-2 rounded-full border border-gold/30 bg-ink-soft/60 backdrop-blur flex items-center gap-1.5 text-gold hover:border-gold/80 hover:text-gold-bright transition"
