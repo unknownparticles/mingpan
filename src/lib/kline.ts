@@ -2,14 +2,15 @@
  * 人生 K 线 - 基于真实流年/大运/四化 计算
  *
  * 数据源：
- * - 紫微大限（每 10 年换一个命宫，共 10 大限）
- * - 八字大运（10 年一步，乾造/坤造 顺逆不同）
- * - 流年地支 + 流年四化（基于生年天干）
- * - 命盘 12 宫主星
+ * - 紫微大限 / 流年 / 小限（iztro horoscope）
+ * - 流年·大限·小限四化落本命宫
+ * - 流年/大限盘宫名轮转
+ * - 八字大运（daYunList）
+ * - 本命 12 宫主星底色
  *
- * 每 5 岁一个数据点：
- * - 取该年龄段所在大限 + 该点前后 2 个流年的均值
- * - 4 维度（健康/财运/官运/姻缘）分按四化落宫、主星吉凶、宫位作用计算
+ * 每年一个节点（1..100 岁）：
+ * - 四维分以「流年四化」为年变主驱动，避免整段平台同分
+ * - 四化详情独立展示（主星+文昌文曲左右等辅星）
  */
 
 import { astro } from 'iztro';
@@ -52,7 +53,7 @@ export interface DataPoint {
   decadeIndex: number;       // 大限序号 0..9
   decadeName: string;         // 大限命宫所在
   ganZhi: string;             // 流年干支
-  /** 四化独立信息：与 4 维分脱钩，单独展示 */
+  /** 四化落宫详情（同时参与四维评分） */
   siHua: SiHuaInfo;
   highlights: string[];       // 1-2 句简短注解
 }
@@ -63,47 +64,56 @@ export interface DimensionSeries {
   points: { age: number; value: number }[];
 }
 
-// 12 宫位对应的维度权重（宫位四化对四维度影响）
+// 12 宫位对应的维度权重（宫位四化/主星对四维度影响）
+// 注意：iztro 宫名用「仆役/迁移」，不用「交友」
 const PALACE_DIM_WEIGHT: Record<string, Partial<Record<Dimension, number>>> = {
-  '命宫': { health: 1.0, career: 0.6 },
-  '财帛': { wealth: 1.2 },
-  '官禄': { career: 1.2 },
-  '夫妻': { marriage: 1.2 },
-  '疾厄': { health: 1.0 },
-  '子女': { marriage: 0.5, health: 0.4 },
-  '田宅': { wealth: 0.6, health: 0.4 },
-  '交友': { career: 0.5, marriage: 0.4 },
-  '兄弟': { health: 0.4, career: 0.5 },
-  '父母': { career: 0.5, health: 0.4 },
-  '福德': { health: 0.8, marriage: 0.4 },
+  '命宫': { health: 1.0, career: 0.7, wealth: 0.3, marriage: 0.3 },
+  '财帛': { wealth: 1.2, career: 0.3 },
+  '官禄': { career: 1.2, wealth: 0.3 },
+  '夫妻': { marriage: 1.2, health: 0.2 },
+  '疾厄': { health: 1.2 },
+  '子女': { marriage: 0.6, health: 0.35 },
+  '田宅': { wealth: 0.7, health: 0.35 },
+  '仆役': { career: 0.55, marriage: 0.35 },
+  '迁移': { career: 0.55, wealth: 0.35, marriage: 0.25 },
+  '兄弟': { health: 0.35, career: 0.45 },
+  '父母': { career: 0.5, health: 0.35 },
+  '福德': { health: 0.85, marriage: 0.45 },
+  // 兼容旧名
+  '交友': { career: 0.55, marriage: 0.35 },
 };
 
 // 主星吉凶对维度的默认权重
 const MAJOR_STAR_BASE: Record<string, Partial<Record<Dimension, number>>> = {
-  '紫微': { career: 0.4, wealth: 0.3 },
-  '天府': { wealth: 0.4, health: 0.3 },
-  '太阳': { career: 0.5, marriage: 0.2 },
-  '太阴': { wealth: 0.4, marriage: 0.3 },
-  '武曲': { wealth: 0.5, career: 0.3 },
-  '天同': { health: 0.4, marriage: 0.3 },
+  '紫微': { career: 0.45, wealth: 0.3 },
+  '天府': { wealth: 0.45, health: 0.3 },
+  '太阳': { career: 0.5, marriage: 0.25 },
+  '太阴': { wealth: 0.4, marriage: 0.35 },
+  '武曲': { wealth: 0.55, career: 0.3 },
+  '天同': { health: 0.45, marriage: 0.3 },
   '廉贞': { career: 0.3, marriage: 0.3 },
-  '天机': { career: 0.4, health: 0.2 },
-  '贪狼': { marriage: 0.4, career: 0.3 },
+  '天机': { career: 0.4, health: 0.25 },
+  '贪狼': { marriage: 0.45, career: 0.25 },
   '巨门': { career: 0.2, health: -0.2 },
   '天相': { career: 0.3, marriage: 0.3 },
   '天梁': { health: 0.5, career: 0.2 },
-  '七杀': { career: 0.4, health: 0.2 },
+  '七杀': { career: 0.4, health: 0.15 },
   '破军': { career: 0.3, wealth: 0.2 },
-  '火星': { career: 0.2, health: -0.2 },
-  '铃星': { career: 0.2, health: -0.2 },
-  '擎羊': { health: -0.3, marriage: -0.2 },
-  '陀罗': { career: -0.2, health: -0.2 },
-  '禄存': { wealth: 0.6, health: 0.2 },
-  '天魁': { career: 0.2, marriage: 0.2 },
-  '天钺': { career: 0.2, marriage: 0.2 },
+  '文昌': { career: 0.35, wealth: 0.15 },
+  '文曲': { career: 0.25, marriage: 0.25 },
+  '左辅': { career: 0.25, marriage: 0.2 },
+  '右弼': { career: 0.25, marriage: 0.2 },
+  '火星': { career: 0.2, health: -0.25 },
+  '铃星': { career: 0.2, health: -0.25 },
+  '擎羊': { health: -0.35, marriage: -0.2 },
+  '陀罗': { career: -0.25, health: -0.25 },
+  '禄存': { wealth: 0.65, health: 0.2 },
+  '天马': { career: 0.2, wealth: 0.2 },
+  '天魁': { career: 0.25, marriage: 0.2 },
+  '天钺': { career: 0.25, marriage: 0.2 },
 };
 
-// 流年天干 → 四化
+// 流年天干 → 四化（禄权科忌）
 const SI_HUA: Record<string, [string, string, string, string]> = {
   '甲': ['廉贞', '破军', '武曲', '太阳'],
   '乙': ['天机', '天梁', '紫微', '太阴'],
@@ -117,6 +127,14 @@ const SI_HUA: Record<string, [string, string, string, string]> = {
   '癸': ['破军', '巨门', '太阴', '贪狼'],
 };
 
+/** 四化对落宫的基础冲击（再乘宫位维度权重） */
+const MUTAGEN_IMPACT: Record<'禄' | '权' | '科' | '忌', number> = {
+  '禄': 16,
+  '权': 11,
+  '科': 8,
+  '忌': -15,
+};
+
 const HEAVENLY_STEMS = ['甲', '乙', '丙', '丁', '戊', '己', '庚', '辛', '壬', '癸'];
 const EARTHLY_BRANCHES = ['子', '丑', '寅', '卯', '辰', '巳', '午', '未', '申', '酉', '戌', '亥'];
 
@@ -128,87 +146,175 @@ function getYearGanZhi(year: number): string {
   return gan + zhi;
 }
 
-function getDecadeInfo(astrolabe: any, age: number, shiChenIndex: number, birthYear: number): { index: number; name: string; palaces: any[] } {
-  // iztro 用 targetDate 算流年，decade 从 age 推断
-  const targetDate = new Date(birthYear + age - 1, 5, 15, 12, 0, 0);
-  const horoscope = astrolabe.horoscope(targetDate, shiChenIndex);
-  if (!horoscope || !horoscope.decadal) return { index: 0, name: '命宫', palaces: [] };
-  return {
-    index: Math.floor((age - 1) / 10),
-    name: horoscope.decadal.ming || '命宫',
-    palaces: horoscope.decadal.palaces || [],
-  };
+/** 收集宫内全部可化之星（主星+辅星） */
+function palaceStars(palace: any): any[] {
+  if (!palace) return [];
+  return [
+    ...(palace.majorStars || []),
+    ...(palace.minorStars || []),
+  ];
 }
 
-/** 命盘十二宫主星吉凶基础分 */
-function basePalaceScore(palaces: any[], dim: Dimension): number {
-  let score = 50;  // 基础分
-  for (const p of palaces) {
+/** 星落本命何宫 */
+function findStarPalaceName(astrolabe: any, starName: string): string | null {
+  for (const p of astrolabe?.palaces || []) {
+    if (palaceStars(p).some((s) => s.name === starName)) return p.name as string;
+  }
+  return null;
+}
+
+/** 命盘十二宫主星基础分（本命静态，权重较低，作底色） */
+function natalBaseScore(astrolabe: any, dim: Dimension): number {
+  let score = 48;
+  for (const p of astrolabe?.palaces || []) {
     if (!p) continue;
-    const palaceName = p.name;
-    const palaceWeight = PALACE_DIM_WEIGHT[palaceName]?.[dim] || 0;
+    const palaceWeight = PALACE_DIM_WEIGHT[p.name]?.[dim] || 0;
     if (palaceWeight === 0) continue;
-    for (const s of p.majorStars || []) {
+    for (const s of palaceStars(p)) {
       const starWeight = MAJOR_STAR_BASE[s.name]?.[dim] || 0;
-      if (starWeight !== 0) {
-        score += palaceWeight * starWeight * 20;
-      }
+      if (starWeight !== 0) score += palaceWeight * starWeight * 10;
     }
   }
   return score;
 }
 
-/** 紫微四化对各维度的影响 */
-/** 计算流年四化：四个化各自落入哪个宫位
- *  与 4 维分脱钩，仅作为独立信息展示
+/**
+ * 四化冲击：星落本命宫 → 按宫位维度加权
+ * scale: 流年 1.0 / 大限 0.65 / 小限 0.35
  */
-function computeSiHua(ganZhi: string, astrolabe: any): SiHuaInfo {
-  const gan = ganZhi[0];
-  const sihua = SI_HUA[gan];
-  if (!sihua) return { luPalace: null, quanPalace: null, kePalace: null, jiPalace: null, details: [] };
-  const [lu, quan, ke, ji] = sihua;
-  const result: SiHuaInfo = { luPalace: null, quanPalace: null, kePalace: null, jiPalace: null, details: [] };
-  for (const palace of astrolabe.palaces || []) {
-    if (!palace.majorStars) continue;
-    for (const s of palace.majorStars) {
-      if (s.name === lu) { result.luPalace = palace.name; result.details.push(`${lu}化禄入${palace.name}`); }
-      else if (s.name === quan) { result.quanPalace = palace.name; result.details.push(`${quan}化权入${palace.name}`); }
-      else if (s.name === ke) { result.kePalace = palace.name; result.details.push(`${ke}化科入${palace.name}`); }
-      else if (s.name === ji) { result.jiPalace = palace.name; result.details.push(`${ji}化忌入${palace.name}`); }
+function mutagenDimScore(
+  mutagen: string[] | undefined,
+  astrolabe: any,
+  dim: Dimension,
+  scale: number,
+): number {
+  if (!mutagen || mutagen.length < 4) return 0;
+  const types: Array<'禄' | '权' | '科' | '忌'> = ['禄', '权', '科', '忌'];
+  let score = 0;
+  for (let i = 0; i < 4; i++) {
+    const star = mutagen[i];
+    if (!star) continue;
+    const palace = findStarPalaceName(astrolabe, star);
+    if (!palace) continue;
+    const pw = PALACE_DIM_WEIGHT[palace]?.[dim] || 0;
+    if (pw === 0) continue;
+    // 主星本身对维度的亲和再微调
+    const sw = MAJOR_STAR_BASE[star]?.[dim] ?? 0.25;
+    const affinity = Math.max(0.35, Math.min(1.4, 0.7 + sw));
+    score += MUTAGEN_IMPACT[types[i]] * pw * affinity * scale;
+  }
+  return score;
+}
+
+/**
+ * 流年/大限盘宫名轮转：物理宫位上的本命主星，被标为流年命/财/官/夫时加权
+ * 每年 palaceNames 旋转，分数会年年变化
+ */
+function rotatingPalaceScore(
+  astrolabe: any,
+  palaceNames: string[] | undefined,
+  dim: Dimension,
+  scale: number,
+): number {
+  if (!palaceNames?.length) return 0;
+  let score = 0;
+  const palaces = astrolabe?.palaces || [];
+  for (let i = 0; i < Math.min(12, palaceNames.length, palaces.length); i++) {
+    const role = palaceNames[i];
+    const natal = palaces[i];
+    const roleW = PALACE_DIM_WEIGHT[role]?.[dim] || 0;
+    if (!roleW || !natal) continue;
+    for (const s of palaceStars(natal)) {
+      const sw = MAJOR_STAR_BASE[s.name]?.[dim] || 0;
+      if (sw === 0) continue;
+      score += roleW * sw * 9 * scale;
     }
+  }
+  return score;
+}
+
+/** 流年地支与命宫/夫妻/财帛地支关系的轻量波动 */
+function branchInteractionScore(astrolabe: any, yearZhi: string, dim: Dimension): number {
+  if (!yearZhi) return 0;
+  const focus: Record<Dimension, string[]> = {
+    health: ['命宫', '疾厄', '福德'],
+    wealth: ['财帛', '田宅', '迁移'],
+    career: ['官禄', '命宫', '迁移'],
+    marriage: ['夫妻', '福德', '子女'],
+  };
+  const sixHe: Record<string, string> = {
+    '子': '丑', '丑': '子', '寅': '亥', '亥': '寅', '卯': '戌', '戌': '卯',
+    '辰': '酉', '酉': '辰', '巳': '申', '申': '巳', '午': '未', '未': '午',
+  };
+  const liuChong: Record<string, string> = {
+    '子': '午', '午': '子', '丑': '未', '未': '丑', '寅': '申', '申': '寅',
+    '卯': '酉', '酉': '卯', '辰': '戌', '戌': '辰', '巳': '亥', '亥': '巳',
+  };
+  let score = 0;
+  for (const name of focus[dim]) {
+    const p = (astrolabe?.palaces || []).find((x: any) => x.name === name);
+    const zhi = p?.earthlyBranch;
+    if (!zhi) continue;
+    if (zhi === yearZhi) score += 3.5;
+    else if (sixHe[zhi] === yearZhi) score += 2.5;
+    else if (liuChong[zhi] === yearZhi) score -= 3.5;
+  }
+  return score;
+}
+
+/** 计算流年四化展示信息（主星+辅星） */
+function computeSiHua(ganZhi: string, astrolabe: any, mutagen?: string[]): SiHuaInfo {
+  const fromTable = SI_HUA[ganZhi[0]];
+  const stars = (mutagen && mutagen.length >= 4 ? mutagen : fromTable) as string[] | undefined;
+  if (!stars) return { luPalace: null, quanPalace: null, kePalace: null, jiPalace: null, details: [] };
+  const [lu, quan, ke, ji] = stars;
+  const result: SiHuaInfo = { luPalace: null, quanPalace: null, kePalace: null, jiPalace: null, details: [] };
+  const pairs: Array<['禄' | '权' | '科' | '忌', string]> = [
+    ['禄', lu], ['权', quan], ['科', ke], ['忌', ji],
+  ];
+  for (const [type, star] of pairs) {
+    const palace = findStarPalaceName(astrolabe, star);
+    if (!palace) continue;
+    if (type === '禄') result.luPalace = palace;
+    if (type === '权') result.quanPalace = palace;
+    if (type === '科') result.kePalace = palace;
+    if (type === '忌') result.jiPalace = palace;
+    result.details.push(`${star}化${type}入${palace}`);
   }
   return result;
 }
 
-/** 八字大运对维度的影响（基于大运天干五行与日主关系） */
+/** 八字大运对维度的影响（修复：读取 bazi.daYunList） */
 function dayunScore(bazi: any, age: number, dim: Dimension): number {
-  if (!bazi?.yun) return 0;
-  const yun = bazi.yun as any;
-  if (!yun.startAge) return 0;
-  // 大运数组
-  const dayunList: any[] = yun.dayunList || yun.list || [];
-  if (dayunList.length === 0) return 0;
-  // 找到该年龄所在大运
-  const startAge = Number(yun.startAge) || 1;
-  const decadeIdx = Math.max(0, Math.floor((age - startAge) / 10));
-  const cur = dayunList[decadeIdx];
+  const list: any[] = bazi?.daYunList || bazi?.yun?.dayunList || bazi?.yun?.list || [];
+  if (!list.length) return 0;
+  const startAge = Number(bazi?.startAge ?? bazi?.yun?.startAge ?? list[0]?.startAge ?? 1) || 1;
+  // 按 startAge/startYear 定位当前大运
+  let cur: any = null;
+  for (let i = 0; i < list.length; i++) {
+    const dy = list[i];
+    const sAge = Number(dy.startAge ?? startAge + i * 10) || 0;
+    const next = list[i + 1];
+    const eAge = next ? Number(next.startAge ?? sAge + 10) : sAge + 10;
+    if (age >= sAge && age < eAge) { cur = dy; break; }
+  }
+  if (!cur) cur = list[Math.min(list.length - 1, Math.max(0, Math.floor((age - startAge) / 10)))];
   if (!cur) return 0;
-  const gan = cur.ganZhi?.[0] || cur.gan || '';
-  // 五行生克：日主 vs 大运天干
-  const dayMasterGan = bazi.day?.gan || '';
+
+  const gan = String(cur.ganZhi || cur.gan || '')[0] || '';
+  const dayMasterGan = bazi.dayMaster || bazi.day?.gan || '';
   const dayMasterEl = elementOf(dayMasterGan);
   const curEl = elementOf(gan);
-  // 简单：生扶为正，克泄为负
   const relationship = relationshipOf(dayMasterEl, curEl);
   let score = 0;
   if (relationship === 'same') score = 3;
-  else if (relationship === 'generate') score = 5;  // 大运生日主
+  else if (relationship === 'generate') score = 5;   // 大运生日主
   else if (relationship === 'generated') score = -2; // 日主生大运
-  else if (relationship === 'control') score = -5;  // 大运克日主
-  else if (relationship === 'controlled') score = 4;  // 日主克大运（财）
-  // 维度映射
+  else if (relationship === 'control') score = -5;   // 大运克日主
+  else if (relationship === 'controlled') score = 4; // 日主克大运（财）
+
   const dimMap: Record<Dimension, string[]> = {
-    health: ['木'],
+    health: ['木', '水'],
     wealth: ['金', '土'],
     career: ['火', '土'],
     marriage: ['水', '木'],
@@ -218,19 +324,18 @@ function dayunScore(bazi: any, age: number, dim: Dimension): number {
 }
 
 const ELEMENTS: Record<string, string> = {
-  '甲': '木', '乙': '木', '丙': '火', '丁': '火', '戊': '土', '己': '土', '庚': '金', '辛': '金', '壬': '水', '癸': '水',
+  '甲': '木', '乙': '木', '丙': '火', '丁': '火', '戊': '土', '己': '土',
+  '庚': '金', '辛': '金', '壬': '水', '癸': '水',
 };
 function elementOf(gan: string): string {
   return ELEMENTS[gan] || '土';
 }
-// 五行生克：generate = A 生 B, control = A 克 B
 function relationshipOf(a: string, b: string): string {
   if (a === b) return 'same';
   const cycle = ['木', '火', '土', '金', '水'];
   const ai = cycle.indexOf(a);
   const bi = cycle.indexOf(b);
   if (ai === -1 || bi === -1) return 'same';
-  // a 生 b: bi = (ai+1) % 5
   if (bi === (ai + 1) % 5) return 'generate';
   if (ai === (bi + 1) % 5) return 'generated';
   if (bi === (ai + 2) % 5) return 'control';
@@ -238,51 +343,113 @@ function relationshipOf(a: string, b: string): string {
   return 'same';
 }
 
+/** 平滑年龄曲线（避免整段平台） */
+function ageCurve(age: number, dim: Dimension): number {
+  // 人生节奏：少年蓄势 → 青壮爬坡 → 中年高峰 → 晚年缓收
+  const peak: Record<Dimension, number> = {
+    health: 28, wealth: 42, career: 40, marriage: 32,
+  };
+  const p = peak[dim];
+  const dist = Math.abs(age - p);
+  const bell = 6 * Math.exp(-(dist * dist) / (2 * 18 * 18));
+  let extra = 0;
+  if (age <= 12) extra += 1.5;
+  if (age >= 65) extra -= 2.5;
+  if (age >= 80) extra -= 2;
+  return bell + extra;
+}
+
+function getHoroscope(astrolabe: any, age: number, shiChenIndex: number, birthYear: number): any {
+  // 取该虚岁对应公历年中点，避免跨年边界抖动
+  const targetDate = new Date(birthYear + age - 1, 5, 15, 12, 0, 0);
+  try {
+    return astrolabe.horoscope(targetDate, shiChenIndex);
+  } catch {
+    return null;
+  }
+}
+
+function decadeMingPalaceName(horoscope: any, astrolabe: any): string {
+  const names: string[] = horoscope?.decadal?.palaceNames || [];
+  const idx = names.indexOf('命宫');
+  if (idx >= 0 && astrolabe?.palaces?.[idx]?.name) return astrolabe.palaces[idx].name;
+  return horoscope?.decadal?.name || '命宫';
+}
+
 /** 综合一个年龄点位的 4 维分 */
 function calcPoint(age: number, year: number, astrolabe: any, bazi: any, shiChenIndex: number, birthYear: number): DataPoint {
-  const decade = getDecadeInfo(astrolabe, age, shiChenIndex, birthYear);
-  if (!decade.palaces || decade.palaces.length === 0) {
-    (decade as any).palaces = astrolabe.palaces || [];
-  }
-  // alias for inline
-  const usePalaces = decade.palaces;
-  void usePalaces;
+  const horoscope = getHoroscope(astrolabe, age, shiChenIndex, birthYear);
+  const ganZhi = horoscope?.yearly
+    ? `${horoscope.yearly.heavenlyStem || ''}${horoscope.yearly.earthlyBranch || ''}` || getYearGanZhi(year)
+    : getYearGanZhi(year);
+  const yearZhi = ganZhi[1] || '';
 
-  const ganZhi = getYearGanZhi(year);
+  const yearlyMutagen: string[] | undefined = horoscope?.yearly?.mutagen;
+  const decadalMutagen: string[] | undefined = horoscope?.decadal?.mutagen;
+  const ageMutagen: string[] | undefined = horoscope?.age?.mutagen;
+
+  const siHua = computeSiHua(ganZhi, astrolabe, yearlyMutagen);
+  const decadeIndex = Math.max(0, Math.floor((age - 1) / 10));
+  const decadeName = decadeMingPalaceName(horoscope, astrolabe);
+
   const dims: Dimension[] = ['health', 'wealth', 'career', 'marriage'];
-  const siHua = computeSiHua(ganZhi, astrolabe);
   const point: DataPoint = {
     age, year,
     health: 0, wealth: 0, career: 0, marriage: 0,
-    decadeIndex: decade.index,
-    decadeName: decade.name,
+    decadeIndex,
+    decadeName,
     ganZhi,
     siHua,
     highlights: [],
   };
 
-  // 4 维分计算 = 主星吉凶 + 大限宫位 + 八字大运
-  // 注意：四化不计入总分，仅作为独立信息展示在点位卡中
+  /**
+   * 评分结构（修复「多年同分」）：
+   * 1. 本命主星底色（静）
+   * 2. 流年四化落宫（年年变，主驱动）
+   * 3. 大限四化（约十年一变）
+   * 4. 小限四化（年变，权重较低）
+   * 5. 流年/大限盘宫名轮转（年变/十年变）
+   * 6. 流年地支与命宫冲合
+   * 7. 八字大运
+   * 8. 年龄曲线
+   */
   for (const dim of dims) {
-    const base = basePalaceScore(decade.palaces, dim);
-    const dy = dayunScore(bazi, age, dim);
-    let total = base + dy;
-    // 年龄加成
-    if (age >= 30 && age <= 50) total += 4;
-    if (age >= 60) total -= 3;
-    if (age <= 12) total += 2;
-    total = Math.max(2, Math.min(98, Math.round(total)));
+    let total = 0;
+    total += natalBaseScore(astrolabe, dim) * 0.55;
+    total += mutagenDimScore(yearlyMutagen, astrolabe, dim, 1.0);
+    total += mutagenDimScore(decadalMutagen, astrolabe, dim, 0.65);
+    total += mutagenDimScore(ageMutagen, astrolabe, dim, 0.3);
+    total += rotatingPalaceScore(astrolabe, horoscope?.yearly?.palaceNames, dim, 0.7);
+    total += rotatingPalaceScore(astrolabe, horoscope?.decadal?.palaceNames, dim, 0.45);
+    total += branchInteractionScore(astrolabe, yearZhi, dim);
+    total += dayunScore(bazi, age, dim);
+    total += ageCurve(age, dim);
+
+    // 维度中心微调，避免健康/姻缘系统性偏低、官运系统性偏高
+    const dimBias: Record<Dimension, number> = {
+      health: 10, wealth: 4, career: -2, marriage: 8,
+    };
+    total += dimBias[dim];
+    // 归一夹紧：保留年际起伏，同时落在可读区间
+    total = Math.max(8, Math.min(95, Math.round(total)));
     point[dim] = total;
   }
 
-  // 高亮：取 4 维中最高 / 最低的方向
+  // 高亮：结合分数与四化
   const maxDim = dims.reduce((m, d) => point[d] > point[m] ? d : m, 'health' as Dimension);
   const minDim = dims.reduce((m, d) => point[d] < point[m] ? d : m, 'health' as Dimension);
-  if (point[maxDim] >= 75) {
+  if (point[maxDim] >= 72) {
     point.highlights.push(`${year}年 ${ganZhi}：${DIMENSION_NAMES[maxDim]}较顺`);
   }
-  if (point[minDim] <= 35) {
+  if (point[minDim] <= 38) {
     point.highlights.push(`${year}年：${DIMENSION_NAMES[minDim]}需谨慎`);
+  }
+  if (siHua.luPalace && (siHua.luPalace === '财帛' || siHua.luPalace === '官禄' || siHua.luPalace === '夫妻')) {
+    point.highlights.push(`化禄入${siHua.luPalace}`);
+  }
+  if (siHua.jiPalace && (siHua.jiPalace === '命宫' || siHua.jiPalace === '疾厄' || siHua.jiPalace === '财帛' || siHua.jiPalace === '官禄' || siHua.jiPalace === '夫妻')) {
+    point.highlights.push(`化忌入${siHua.jiPalace}`);
   }
 
   return point;
@@ -369,10 +536,10 @@ export function pointToLLMContext(
 
 【所在大限】第 ${point.decadeIndex + 1} 大限（${point.decadeName}宫）
 
-# 一、流年四化（独立分析，与四维分脱钩）
+# 一、流年四化（已计入四维分，此处展开落宫细节）
 ${siHuaLines.length > 0 ? siHuaLines.join('\n') : '- （该年四化未入 12 宫）'}
 
-# 二、该年四维运势分（主星 + 大限宫 + 八字大运 算出）
+# 二、该年四维运势分（流年四化为主驱动 + 大限/小限四化 + 盘面轮转 + 八字大运 + 本命底色）
 - 健康：${point.health} 分
 - 财运：${point.wealth} 分
 - 官运/事业：${point.career} 分
