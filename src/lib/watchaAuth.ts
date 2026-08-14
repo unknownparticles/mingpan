@@ -105,6 +105,7 @@ export async function startWatchaLogin(redirectUri: string): Promise<void> {
 
   sessionStorage.setItem('watcha:pkce_verifier', verifier);
   sessionStorage.setItem('watcha:oauth_state', state);
+  sessionStorage.setItem('watcha:redirect_uri', redirectUri);
 
   const url = buildWatchaAuthorizeUrl(redirectUri);
   const u = new URL(url);
@@ -207,6 +208,9 @@ export function clearWatchaSession() {
   try {
     localStorage.removeItem(TOKEN_KEY);
     localStorage.removeItem(USER_KEY);
+    sessionStorage.removeItem('watcha:pkce_verifier');
+    sessionStorage.removeItem('watcha:oauth_state');
+    sessionStorage.removeItem('watcha:redirect_uri');
   } catch {
     // ignore
   }

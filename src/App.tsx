@@ -105,12 +105,14 @@ export default function App() {
       }
 
       // Watcha OAuth2 callback handling
+      // Watcha 回跳带标准 OAuth2 参数: ?code=...&state=...
       const params = new URLSearchParams(window.location.search);
-      const watchaCode = params.get('watcha_code');
-      const watchaState = params.get('watcha_state');
+      const watchaCode = params.get('code');
+      const watchaState = params.get('state');
       if (watchaCode && watchaState) {
         try {
-          const session = await handleWatchaCallback(watchaCode, watchaState, `${window.location.origin}${window.location.pathname}`);
+          const redirectUri = sessionStorage.getItem('watcha:redirect_uri') || `${window.location.origin}${window.location.pathname}`;
+          const session = await handleWatchaCallback(watchaCode, watchaState, redirectUri);
           applyLoginAIDefaults({ force: true });
           setAuthUser({
             id: String(session.user.user_id),
@@ -126,8 +128,8 @@ export default function App() {
           } as AuthUser);
           // Clean URL params
           const url = new URL(window.location.href);
-          url.searchParams.delete('watcha_code');
-          url.searchParams.delete('watcha_state');
+          url.searchParams.delete('code');
+          url.searchParams.delete('state');
           window.history.replaceState(null, '', url.toString());
         } catch (e: any) {
           console.error('Watcha login failed:', e?.message);
