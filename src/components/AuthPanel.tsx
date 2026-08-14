@@ -107,6 +107,11 @@ export default function AuthPanel({ onAuthChange }: Props) {
     setError('');
     setMessage('');
     try {
+      // 互斥：词源登录时退出 CF Auth
+      if (isWatchaLoggedIn()) {
+        await logoutWatcha();
+        setWatchaUser(null);
+      }
       const session = await loginWithPassword(account.trim(), password);
       applyLoginAIDefaults({ force: true });
       setUser(session.user);
@@ -125,6 +130,11 @@ export default function AuthPanel({ onAuthChange }: Props) {
     setError('');
     setMessage('');
     try {
+      // 互斥：CF Auth 注册时退出词源
+      if (isWatchaLoggedIn()) {
+        await logoutWatcha();
+        setWatchaUser(null);
+      }
       const session = await registerWithPassword({
         username: username.trim(),
         email: email.trim(),
@@ -138,6 +148,25 @@ export default function AuthPanel({ onAuthChange }: Props) {
     } catch (err: any) {
       setError(err?.message || '注册失败');
     } finally {
+      setLoading(false);
+    }
+  }
+
+  async function onWatchaLogin() {
+    setLoading(true);
+    setError('');
+    setMessage('');
+    try {
+      // 互斥：词源登录时退出 CF Auth
+      if (isLoggedIn()) {
+        await logout();
+        setUser(null);
+      }
+      const redirectUri = `${window.location.origin}${window.location.pathname}`;
+      const url = buildWatchaAuthorizeUrl(redirectUri);
+      window.location.href = url;
+    } catch (err: any) {
+      setError(err?.message || '跳转失败');
       setLoading(false);
     }
   }
@@ -241,12 +270,9 @@ export default function AuthPanel({ onAuthChange }: Props) {
       {/* Watcha OAuth2 登录按钮 */}
       {!user && !watchaUser && (
         <button
-          onClick={() => {
-            const redirectUri = `${window.location.origin}${window.location.pathname}`;
-            const url = buildWatchaAuthorizeUrl(redirectUri);
-            window.location.href = url;
-          }}
-          className="w-full flex items-center justify-center gap-2 bg-emerald-900/30 border border-emerald-600/40 text-emerald-300 hover:bg-emerald-900/50 hover:text-emerald-200 text-sm py-2.5 rounded transition"
+          onClick={onWatchaLogin}
+          disabled={loading}
+          className="w-full flex items-center justify-center gap-2 bg-emerald-900/30 border border-emerald-600/40 text-emerald-300 hover:bg-emerald-900/50 hover:text-emerald-200 text-sm py-2.5 rounded transition disabled:opacity-40"
         >
           <span className="text-base">🌿</span>
           <span className="title-display tracking-widest">词源跳动登录</span>

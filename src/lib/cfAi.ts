@@ -2,6 +2,7 @@
 // 登录后用 Bearer Token 调用平台模型；未登录不可走此通道
 
 import { getStoredToken, isLoggedIn } from './auth';
+import { isWatchaLoggedIn } from './watchaAuth';
 
 export interface CfAiModel {
   id: string;
@@ -146,7 +147,7 @@ export async function callCfAiChat(input: {
   maxTokens?: number;
   signal?: AbortSignal;
 }): Promise<CfAiChatResult> {
-  if (!isLoggedIn() && !getStoredToken()) {
+  if (!isLoggedIn() && !isWatchaLoggedIn()) {
     throw new Error('平台 AI 需要登录后使用');
   }
   return api<CfAiChatResult>(
