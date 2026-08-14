@@ -12,7 +12,17 @@ import {
   type AuthPublicConfig,
   type AuthUser,
 } from '../lib/auth';
-import { applyLoginAIDefaults, applyLogoutAIDefaults } from '../lib/aiInterpret';
+import {
+  applyLoginAIDefaults,
+  applyLogoutAIDefaults,
+} from '../lib/aiInterpret';
+import {
+  buildWatchaAuthorizeUrl,
+  getStoredWatchaUser,
+  isWatchaLoggedIn,
+  logoutWatcha,
+  type WatchaUserInfo,
+} from '../lib/watchaAuth';
 
 type Mode = 'login' | 'register';
 
@@ -22,9 +32,30 @@ interface Props {
 
 export default function AuthPanel({ onAuthChange }: Props) {
   const [user, setUserState] = useState<AuthUser | null>(getStoredUser());
+  const [watchaUser, setWatchaUserState] = useState(getStoredWatchaUser());
   function setUser(next: AuthUser | null) {
     setUserState(next);
     onAuthChange?.(next);
+  }
+  function setWatchaUser(next: WatchaUserInfo | null) {
+    setWatchaUserState(next);
+    // Sync to main auth state
+    if (next) {
+      setUser({
+        id: String(next.user_id),
+        username: next.nickname,
+        email: next.email ?? null,
+        displayName: next.nickname,
+        avatarUrl: next.avatar_url ?? null,
+        status: 'active',
+        membership: { tier: 'free', name: 'free', level: 0, benefits: [], expiresAt: null, active: true, sourceTier: 'free', expired: false },
+        points: 0,
+        createdAt: '',
+        lastLoginAt: null,
+      } as AuthUser);
+    } else {
+      setUser(null);
+    }
   }
   const [config, setConfig] = useState<AuthPublicConfig | null>(null);
   const [mode, setMode] = useState<Mode>('login');
@@ -57,6 +88,12 @@ export default function AuthPanel({ onAuthChange }: Props) {
           if (!cancelled) setUser(me?.user || null);
         } catch (e: any) {
           if (!cancelled) setError(e?.message || '会话校验失败');
+        }
+      } else if (isWatchaLoggedIn()) {
+        const wu = getStoredWatchaUser();
+        if (wu && !cancelled) {
+          applyLoginAIDefaults({ force: true });
+          setWatchaUser(wu);
         }
       }
       if (!cancelled) setBooting(false);
@@ -109,9 +146,15 @@ export default function AuthPanel({ onAuthChange }: Props) {
     setLoading(true);
     setError('');
     try {
-      await logout();
+      if (isWatchaLoggedIn()) {
+        await logoutWatcha();
+      }
+      if (isLoggedIn()) {
+        await logout();
+      }
       applyLogoutAIDefaults();
       setUser(null);
+      setWatchaUser(null);
       setMessage('已退出登录');
     } catch (err: any) {
       setError(err?.message || '退出失败');
@@ -130,6 +173,7 @@ export default function AuthPanel({ onAuthChange }: Props) {
 
   if (user) {
     const m = user.membership;
+    const isWatcha = isWatchaLoggedIn() && !isLoggedIn();
     return (
       <div className="space-y-3">
         <div className="flex items-center gap-3">
@@ -143,6 +187,7 @@ export default function AuthPanel({ onAuthChange }: Props) {
           <div className="min-w-0">
             <div className="text-sm text-cream title-display tracking-widest truncate">
               {user.displayName || user.username}
+              {isWatcha && <span className="ml-1.5 text-[9px] text-jade/80 border border-jade/30 px-1 rounded">词源</span>}
             </div>
             <div className="text-[10px] text-gold/60 truncate">
               @{user.username}{user.email ? ` · ${user.email}` : ''}
@@ -150,24 +195,32 @@ export default function AuthPanel({ onAuthChange }: Props) {
           </div>
         </div>
 
-        <div className="grid grid-cols-2 gap-2">
-          <div className="rounded border border-gold/20 bg-ink-soft/40 p-2">
-            <div className="text-[10px] text-gold/50">会员等级</div>
-            <div className="text-sm text-gold-bright title-display tracking-wider mt-0.5">
-              {m?.name || m?.tier || 'free'}
+        {isWatcha && (
+          <div className="text-[10px] text-jade/80 border border-jade/20 rounded p-2">
+            已通过词源跳动登录 · 平台 AI 功能可用
+          </div>
+        )}
+
+        {!isWatcha && (
+          <div className="grid grid-cols-2 gap-2">
+            <div className="rounded border border-gold/20 bg-ink-soft/40 p-2">
+              <div className="text-[10px] text-gold/50">会员等级</div>
+              <div className="text-sm text-gold-bright title-display tracking-wider mt-0.5">
+                {m?.name || m?.tier || 'free'}
+              </div>
+              <div className="text-[10px] text-gold/40 mt-0.5">
+                {m?.expired ? '已过期回落' : (m?.expiresAt ? `到期 ${new Date(m.expiresAt).toLocaleDateString()}` : '长期有效')}
+              </div>
             </div>
-            <div className="text-[10px] text-gold/40 mt-0.5">
-              {m?.expired ? '已过期回落' : (m?.expiresAt ? `到期 ${new Date(m.expiresAt).toLocaleDateString()}` : '长期有效')}
+            <div className="rounded border border-gold/20 bg-ink-soft/40 p-2">
+              <div className="text-[10px] text-gold/50">可用积分</div>
+              <div className="text-sm text-gold-bright title-display tracking-wider mt-0.5">
+                {user.points ?? 0}
+              </div>
+              <div className="text-[10px] text-gold/40 mt-0.5">level {m?.level ?? 0}</div>
             </div>
           </div>
-          <div className="rounded border border-gold/20 bg-ink-soft/40 p-2">
-            <div className="text-[10px] text-gold/50">可用积分</div>
-            <div className="text-sm text-gold-bright title-display tracking-wider mt-0.5">
-              {user.points ?? 0}
-            </div>
-            <div className="text-[10px] text-gold/40 mt-0.5">level {m?.level ?? 0}</div>
-          </div>
-        </div>
+        )}
 
         {message && <div className="text-xs text-jade">{message}</div>}
         {error && <div className="text-xs text-vermilion">{error}</div>}
@@ -185,6 +238,21 @@ export default function AuthPanel({ onAuthChange }: Props) {
 
   return (
     <div className="space-y-3">
+      {/* Watcha OAuth2 登录按钮 */}
+      {!user && !watchaUser && (
+        <button
+          onClick={() => {
+            const redirectUri = `${window.location.origin}${window.location.pathname}`;
+            const url = buildWatchaAuthorizeUrl(redirectUri);
+            window.location.href = url;
+          }}
+          className="w-full flex items-center justify-center gap-2 bg-emerald-900/30 border border-emerald-600/40 text-emerald-300 hover:bg-emerald-900/50 hover:text-emerald-200 text-sm py-2.5 rounded transition"
+        >
+          <span className="text-base">🌿</span>
+          <span className="title-display tracking-widest">词源跳动登录</span>
+        </button>
+      )}
+
       <div className="flex gap-2">
         <button
           className={`flex-1 text-xs py-1.5 rounded ${mode === 'login' ? 'btn-vermilion' : 'btn-ghost'}`}

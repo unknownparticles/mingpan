@@ -23,6 +23,10 @@ import {
   type AuthUser,
 } from './lib/auth';
 import { applyLoginAIDefaults } from './lib/aiInterpret';
+import {
+  handleWatchaCallback,
+  getStoredWatchaUser,
+} from './lib/watchaAuth';
 
 type Tab = 'ziwei' | 'qimen' | 'bazi' | 'overall' | 'tools' | 'form' | 'home' | 'divination' | 'settings';
 
@@ -43,7 +47,24 @@ export default function App() {
   const [loading, setLoading] = useState<{ show: boolean; type: 'ziwei' | 'qimen' | 'bazi' }>({
     show: false, type: 'ziwei',
   });
-  const [authUser, setAuthUser] = useState<AuthUser | null>(() => getStoredUser());
+  const [authUser, setAuthUser] = useState<AuthUser | null>(() => {
+    const wu = getStoredWatchaUser();
+    if (wu) {
+      return {
+        id: String(wu.user_id),
+        username: wu.nickname,
+        email: wu.email ?? null,
+        displayName: wu.nickname,
+        avatarUrl: wu.avatar_url ?? null,
+        status: 'active',
+        membership: { tier: 'free', name: 'free', level: 0, benefits: [], expiresAt: null, active: true, sourceTier: 'free', expired: false },
+        points: 0,
+        createdAt: '',
+        lastLoginAt: null,
+      } as AuthUser;
+    }
+    return getStoredUser();
+  });
 
   useEffect(() => {
     setRecords(loadRecords());
@@ -56,9 +77,61 @@ export default function App() {
         await consumeAuthCallbackToken();
         const me = await fetchMe();
         if (me?.user) applyLoginAIDefaults();
-        if (!cancelled) setAuthUser(me?.user || getStoredUser());
+        if (!cancelled) setAuthUser(me?.user || getStoredUser() || (getStoredWatchaUser() ? {
+          id: String(getStoredWatchaUser()!.user_id),
+          username: getStoredWatchaUser()!.nickname,
+          email: getStoredWatchaUser()!.email ?? null,
+          displayName: getStoredWatchaUser()!.nickname,
+          avatarUrl: getStoredWatchaUser()!.avatar_url ?? null,
+          status: 'active',
+          membership: { tier: 'free', name: 'free', level: 0, benefits: [], expiresAt: null, active: true, sourceTier: 'free', expired: false },
+          points: 0,
+          createdAt: '',
+          lastLoginAt: null,
+        } : null));
       } catch {
-        if (!cancelled) setAuthUser(getStoredUser());
+        if (!cancelled) setAuthUser(getStoredUser() || (getStoredWatchaUser() ? {
+          id: String(getStoredWatchaUser()!.user_id),
+          username: getStoredWatchaUser()!.nickname,
+          email: getStoredWatchaUser()!.email ?? null,
+          displayName: getStoredWatchaUser()!.nickname,
+          avatarUrl: getStoredWatchaUser()!.avatar_url ?? null,
+          status: 'active',
+          membership: { tier: 'free', name: 'free', level: 0, benefits: [], expiresAt: null, active: true, sourceTier: 'free', expired: false },
+          points: 0,
+          createdAt: '',
+          lastLoginAt: null,
+        } : null));
+      }
+
+      // Watcha OAuth2 callback handling
+      const params = new URLSearchParams(window.location.search);
+      const watchaCode = params.get('watcha_code');
+      const watchaState = params.get('watcha_state');
+      if (watchaCode && watchaState) {
+        try {
+          const session = await handleWatchaCallback(watchaCode, watchaState, `${window.location.origin}${window.location.pathname}`);
+          applyLoginAIDefaults({ force: true });
+          setAuthUser({
+            id: String(session.user.user_id),
+            username: session.user.nickname,
+            email: session.user.email ?? null,
+            displayName: session.user.nickname,
+            avatarUrl: session.user.avatar_url ?? null,
+            status: 'active',
+            membership: { tier: 'free', name: 'free', level: 0, benefits: [], expiresAt: null, active: true, sourceTier: 'free', expired: false },
+            points: 0,
+            createdAt: '',
+            lastLoginAt: null,
+          } as AuthUser);
+          // Clean URL params
+          const url = new URL(window.location.href);
+          url.searchParams.delete('watcha_code');
+          url.searchParams.delete('watcha_state');
+          window.history.replaceState(null, '', url.toString());
+        } catch (e: any) {
+          console.error('Watcha login failed:', e?.message);
+        }
       }
     })();
     return () => { cancelled = true; };
