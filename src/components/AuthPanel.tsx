@@ -216,7 +216,7 @@ export default function AuthPanel({ onAuthChange }: Props) {
           <div className="min-w-0">
             <div className="text-sm text-cream title-display tracking-widest truncate">
               {user.displayName || user.username}
-              {isWatcha && <span className="ml-1.5 text-[9px] text-jade/80 border border-jade/30 px-1 rounded">词源</span>}
+              {isWatcha && <img src="/watcha-logo.svg" alt="词源" className="ml-1.5 w-4 h-4 rounded-full" />}
             </div>
             <div className="text-[10px] text-gold/60 truncate">
               @{user.username}{user.email ? ` · ${user.email}` : ''}
@@ -272,9 +272,9 @@ export default function AuthPanel({ onAuthChange }: Props) {
         <button
           onClick={onWatchaLogin}
           disabled={loading}
-          className="w-full flex items-center justify-center gap-2 bg-emerald-900/30 border border-emerald-600/40 text-emerald-300 hover:bg-emerald-900/50 hover:text-emerald-200 text-sm py-2.5 rounded transition disabled:opacity-40"
+          className="w-full flex items-center justify-center gap-2.5 bg-emerald-900/30 border border-emerald-600/40 text-emerald-300 hover:bg-emerald-900/50 hover:text-emerald-200 text-sm py-2.5 rounded transition disabled:opacity-40"
         >
-          <span className="text-base">🌿</span>
+          <img src="/watcha-logo.svg" alt="词源跳动" className="w-7 h-7 rounded-full" />
           <span className="title-display tracking-widest">词源跳动登录</span>
         </button>
       )}
