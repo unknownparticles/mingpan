@@ -52,7 +52,7 @@ function generateState(): string {
 
 export function buildWatchaAuthorizeUrl(
   redirectUri: string,
-  scope = 'read email phone',
+  scope = 'read',
 ): string {
   // client_id 公开安全，无需保密
   const encodedClientId = encodeURIComponent('fgGwggSbhaawNJaZ');
