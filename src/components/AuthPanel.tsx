@@ -107,7 +107,7 @@ export default function AuthPanel({ onAuthChange }: Props) {
     setError('');
     setMessage('');
     try {
-      // 互斥：词源登录时退出 CF Auth
+      // 互斥：观猹登录时退出 CF Auth
       if (isWatchaLoggedIn()) {
         await logoutWatcha();
         setWatchaUser(null);
@@ -130,7 +130,7 @@ export default function AuthPanel({ onAuthChange }: Props) {
     setError('');
     setMessage('');
     try {
-      // 互斥：CF Auth 注册时退出词源
+      // 互斥：CF Auth 注册时退出观猹
       if (isWatchaLoggedIn()) {
         await logoutWatcha();
         setWatchaUser(null);
@@ -157,7 +157,7 @@ export default function AuthPanel({ onAuthChange }: Props) {
     setError('');
     setMessage('');
     try {
-      // 互斥：词源登录时退出 CF Auth
+      // 互斥：观猹登录时退出 CF Auth
       if (isLoggedIn()) {
         await logout();
         setUser(null);
@@ -216,7 +216,7 @@ export default function AuthPanel({ onAuthChange }: Props) {
           <div className="min-w-0">
             <div className="text-sm text-cream title-display tracking-widest truncate">
               {user.displayName || user.username}
-              {isWatcha && <img src="/watcha-logo.svg" alt="词源" className="ml-1.5 w-4 h-4 rounded-full" />}
+              {isWatcha && <img src="/watcha-logo.svg" alt="观猹" className="ml-1.5 w-4 h-4 rounded-full" />}
             </div>
             <div className="text-[10px] text-gold/60 truncate">
               @{user.username}{user.email ? ` · ${user.email}` : ''}
@@ -226,7 +226,7 @@ export default function AuthPanel({ onAuthChange }: Props) {
 
         {isWatcha && (
           <div className="text-[10px] text-jade/80 border border-jade/20 rounded p-2">
-            已通过词源跳动登录 · 平台 AI 功能可用
+            已通过观猹登录 · 平台 AI 功能可用
           </div>
         )}
 
@@ -274,8 +274,8 @@ export default function AuthPanel({ onAuthChange }: Props) {
           disabled={loading}
           className="w-full flex items-center justify-center gap-2.5 bg-emerald-900/30 border border-emerald-600/40 text-emerald-300 hover:bg-emerald-900/50 hover:text-emerald-200 text-sm py-2.5 rounded transition disabled:opacity-40"
         >
-          <img src="/watcha-logo.svg" alt="词源跳动" className="w-7 h-7 rounded-full" />
-          <span className="title-display tracking-widest">词源跳动登录</span>
+          <img src="/watcha-logo.svg" alt="观猹" className="w-7 h-7 rounded-full" />
+          <span className="title-display tracking-widest">观猹登录</span>
         </button>
       )}
 
