@@ -30,6 +30,8 @@ interface Props {
   onAuthChange?: (user: AuthUser | null) => void;
 }
 
+const watchaLogoUrl = `${import.meta.env.BASE_URL}watcha-logo.svg`;
+
 export default function AuthPanel({ onAuthChange }: Props) {
   const [user, setUserState] = useState<AuthUser | null>(getStoredUser());
   const [watchaUser, setWatchaUserState] = useState(getStoredWatchaUser());
@@ -216,7 +218,7 @@ export default function AuthPanel({ onAuthChange }: Props) {
           <div className="min-w-0">
             <div className="text-sm text-cream title-display tracking-widest truncate">
               {user.displayName || user.username}
-              {isWatcha && <img src="/watcha-logo.svg" alt="观猹" className="ml-1.5 w-4 h-4 rounded-full" />}
+              {isWatcha && <img src={watchaLogoUrl} alt="观猹" className="ml-1.5 w-4 h-4 rounded-full" />}
             </div>
             <div className="text-[10px] text-gold/60 truncate">
               @{user.username}{user.email ? ` · ${user.email}` : ''}
@@ -274,7 +276,7 @@ export default function AuthPanel({ onAuthChange }: Props) {
           disabled={loading}
           className="w-full flex items-center justify-center gap-2.5 bg-emerald-900/30 border border-emerald-600/40 text-emerald-300 hover:bg-emerald-900/50 hover:text-emerald-200 text-sm py-2.5 rounded transition disabled:opacity-40"
         >
-          <img src="/watcha-logo.svg" alt="观猹" className="w-7 h-7 rounded-full" />
+          <img src={watchaLogoUrl} alt="观猹" className="w-7 h-7 rounded-full" />
           <span className="title-display tracking-widest">观猹登录</span>
         </button>
       )}
