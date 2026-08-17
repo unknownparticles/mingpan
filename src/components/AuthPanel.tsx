@@ -17,11 +17,11 @@ import {
   applyLogoutAIDefaults,
 } from '../lib/aiInterpret';
 import {
-  buildWatchaAuthorizeUrl,
   getStoredWatchaUser,
   isWatchaLoggedIn,
   logoutWatcha,
   clearWatchaSession,
+  startWatchaLogin,
   type WatchaUserInfo,
 } from '../lib/watchaAuth';
 import { loadAIConfig, saveAIConfig, hasAIKey, canUseAI } from '../lib/aiInterpret';
@@ -201,8 +201,7 @@ export default function AuthPanel({ onAuthChange }: Props) {
       }
       // Watcha 不强制切 platform，让用户可在设置页选择自备 Key
       const redirectUri = `${window.location.origin}${window.location.pathname}`;
-      const url = buildWatchaAuthorizeUrl(redirectUri);
-      window.location.href = url;
+      await startWatchaLogin(redirectUri);
     } catch (err: any) {
       setError(err?.message || '跳转失败');
       setLoading(false);
