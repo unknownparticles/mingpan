@@ -21,8 +21,10 @@ import {
   getStoredWatchaUser,
   isWatchaLoggedIn,
   logoutWatcha,
+  clearWatchaSession,
   type WatchaUserInfo,
 } from '../lib/watchaAuth';
+import { loadAIConfig, saveAIConfig, hasAIKey, canUseAI } from '../lib/aiInterpret';
 
 type Mode = 'login' | 'register';
 
@@ -37,12 +39,20 @@ export default function AuthPanel({ onAuthChange }: Props) {
   const [watchaUser, setWatchaUserState] = useState(getStoredWatchaUser());
   function setUser(next: AuthUser | null) {
     setUserState(next);
+    // 互斥：设置 CF Auth 用户时清除词源数据
+    if (next) {
+      clearWatchaSession();
+      setWatchaUserState(null);
+    }
     onAuthChange?.(next);
   }
   function setWatchaUser(next: WatchaUserInfo | null) {
     setWatchaUserState(next);
     // Sync to main auth state
     if (next) {
+      // 互斥：设置词源用户时清除 CF Auth 数据
+      localStorage.removeItem('mingpan:auth-token');
+      localStorage.removeItem('mingpan:auth-user');
       setUser({
         id: String(next.user_id),
         username: next.nickname,
@@ -83,7 +93,11 @@ export default function AuthPanel({ onAuthChange }: Props) {
         if (!cancelled) setError(e?.message || '无法连接登录服务');
       }
 
-      if (isLoggedIn()) {
+      // 互斥：只认一个登录态
+      const cfAuth = isLoggedIn();
+      const watcha = isWatchaLoggedIn();
+
+      if (cfAuth && !watcha) {
         try {
           const me = await fetchMe();
           if (me?.user) applyLoginAIDefaults();
@@ -91,13 +105,33 @@ export default function AuthPanel({ onAuthChange }: Props) {
         } catch (e: any) {
           if (!cancelled) setError(e?.message || '会话校验失败');
         }
-      } else if (isWatchaLoggedIn()) {
+      } else if (watcha && !cfAuth) {
         const wu = getStoredWatchaUser();
         if (wu && !cancelled) {
-          applyLoginAIDefaults({ force: true });
+          // Watcha 登录：不强制切 platform，保留用户原有 AI 模式
+          // 如果用户有自备 Key 则可用 BYOK，否则需在设置页填写
+          const c = loadAIConfig();
+          if (!canUseAI(c)) {
+            saveAIConfig({
+              ...c,
+              enabled: hasAIKey(c),
+              accessMode: hasAIKey(c) ? 'byok' : 'byok',
+            });
+          }
           setWatchaUser(wu);
         }
+      } else if (cfAuth && watcha) {
+        // 两边都有：清掉 Watcha，保留 CF Auth
+        await logoutWatcha();
+        try {
+          const me = await fetchMe();
+          if (me?.user) applyLoginAIDefaults();
+          if (!cancelled) setUser(me?.user || null);
+        } catch {
+          clearWatchaSession();
+        }
       }
+
       if (!cancelled) setBooting(false);
     })();
     return () => { cancelled = true; };
@@ -109,9 +143,9 @@ export default function AuthPanel({ onAuthChange }: Props) {
     setError('');
     setMessage('');
     try {
-      // 互斥：观猹登录时退出 CF Auth
+      // 互斥：有词源登录态则先清除
       if (isWatchaLoggedIn()) {
-        await logoutWatcha();
+        clearWatchaSession();
         setWatchaUser(null);
       }
       const session = await loginWithPassword(account.trim(), password);
@@ -132,9 +166,9 @@ export default function AuthPanel({ onAuthChange }: Props) {
     setError('');
     setMessage('');
     try {
-      // 互斥：CF Auth 注册时退出观猹
+      // 互斥：有词源登录态则先清除
       if (isWatchaLoggedIn()) {
-        await logoutWatcha();
+        clearWatchaSession();
         setWatchaUser(null);
       }
       const session = await registerWithPassword({
@@ -159,11 +193,13 @@ export default function AuthPanel({ onAuthChange }: Props) {
     setError('');
     setMessage('');
     try {
-      // 互斥：观猹登录时退出 CF Auth
+      // 互斥：有 CF Auth 登录态则先清除
       if (isLoggedIn()) {
-        await logout();
+        localStorage.removeItem('mingpan:auth-token');
+        localStorage.removeItem('mingpan:auth-user');
         setUser(null);
       }
+      // Watcha 不强制切 platform，让用户可在设置页选择自备 Key
       const redirectUri = `${window.location.origin}${window.location.pathname}`;
       const url = buildWatchaAuthorizeUrl(redirectUri);
       window.location.href = url;
