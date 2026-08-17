@@ -17,8 +17,6 @@ import { isLoggedIn } from '../lib/auth';
 import { fetchCfAiConfig, fetchCfAiMe, getAiBaseUrl, type CfAiModel, type CfAiMe } from '../lib/cfAi';
 import {
   getPointsInfo,
-  getUserPlan,
-  setUserPlan,
   onPointsDeducted,
 } from '../lib/points';
 
@@ -208,17 +206,10 @@ export default function Settings({ onClose, onAuthChange }: Props) {
               </div>
             </div>
             <div className="text-right">
-              <div className="text-[10px] text-jade/60">套餐</div>
-              <select
-                className="bg-transparent text-jade text-xs border border-jade/30 rounded px-1 py-0.5 focus:outline-none"
-                value={getUserPlan()}
-                onChange={e => { setUserPlan(e.target.value); setPointsInfo(getPointsInfo()); }}
-              >
-                <option value="free">免费</option>
-                <option value="vip-lite">VIP 入门 ¥6</option>
-                <option value="vip-pro">VIP 进阶 ¥35</option>
-                <option value="vip-ultimate">VIP 旗舰 ¥70</option>
-              </select>
+              <div className="text-[10px] text-jade/60">当前套餐</div>
+              <div className="text-sm text-jade title-display">
+                {pointsInfo.plan === 'free' ? '免费' : pointsInfo.plan === 'vip-lite' ? 'VIP 入门' : pointsInfo.plan === 'vip-pro' ? 'VIP 进阶' : pointsInfo.plan === 'vip-ultimate' ? 'VIP 旗舰' : pointsInfo.plan}
+              </div>
             </div>
           </div>
           <div className="text-[10px] text-jade/40">

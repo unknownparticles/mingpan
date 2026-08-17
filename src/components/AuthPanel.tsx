@@ -237,26 +237,38 @@ export default function AuthPanel({ onAuthChange }: Props) {
     );
   }
 
-  if (user) {
-    const m = user.membership;
+  if (user || watchaUser) {
     const isWatcha = isWatchaLoggedIn() && !isLoggedIn();
+    const displayUser = user || (watchaUser ? {
+      id: String(watchaUser.user_id),
+      username: watchaUser.nickname,
+      email: watchaUser.email ?? null,
+      displayName: watchaUser.nickname,
+      avatarUrl: watchaUser.avatar_url ?? null,
+      status: 'active',
+      membership: { tier: 'free', name: 'free', level: 0, benefits: [], expiresAt: null, active: true, sourceTier: 'free', expired: false },
+      points: 0,
+      createdAt: '',
+      lastLoginAt: null,
+    } : null);
+    const m = displayUser?.membership;
     return (
       <div className="space-y-3">
         <div className="flex items-center gap-3">
           <div className="w-11 h-11 rounded-full border border-gold/40 bg-ink-soft/70 overflow-hidden flex items-center justify-center text-gold-bright title-display">
-            {user.avatarUrl ? (
-              <img src={user.avatarUrl} alt="" className="w-full h-full object-cover" />
+            {displayUser.avatarUrl ? (
+              <img src={displayUser.avatarUrl} alt="" className="w-full h-full object-cover" />
             ) : (
-              (user.displayName || user.username || '?').slice(0, 1).toUpperCase()
+              (displayUser.displayName || displayUser.username || '?').slice(0, 1).toUpperCase()
             )}
           </div>
           <div className="min-w-0">
             <div className="text-sm text-cream title-display tracking-widest truncate">
-              {user.displayName || user.username}
+              {displayUser.displayName || displayUser.username}
               {isWatcha && <img src={watchaLogoUrl} alt="观猹" className="ml-1.5 w-4 h-4 rounded-full" />}
             </div>
             <div className="text-[10px] text-gold/60 truncate">
-              @{user.username}{user.email ? ` · ${user.email}` : ''}
+              @{displayUser.username}{displayUser.email ? ` · ${displayUser.email}` : ''}
             </div>
           </div>
         </div>
@@ -281,7 +293,7 @@ export default function AuthPanel({ onAuthChange }: Props) {
             <div className="rounded border border-gold/20 bg-ink-soft/40 p-2">
               <div className="text-[10px] text-gold/50">可用积分</div>
               <div className="text-sm text-gold-bright title-display tracking-wider mt-0.5">
-                {user.points ?? 0}
+                {displayUser.points ?? 0}
               </div>
               <div className="text-[10px] text-gold/40 mt-0.5">level {m?.level ?? 0}</div>
             </div>
