@@ -30,11 +30,12 @@ type Mode = 'login' | 'register';
 
 interface Props {
   onAuthChange?: (user: AuthUser | null) => void;
+  currentUser?: AuthUser | null;
 }
 
 const watchaLogoUrl = `${import.meta.env.BASE_URL}watcha-logo.svg`;
 
-export default function AuthPanel({ onAuthChange }: Props) {
+export default function AuthPanel({ onAuthChange, currentUser }: Props) {
   const [user, setUserState] = useState<AuthUser | null>(getStoredUser());
   const [watchaUser, setWatchaUserState] = useState(getStoredWatchaUser());
   function setUser(next: AuthUser | null) {
@@ -69,6 +70,23 @@ export default function AuthPanel({ onAuthChange }: Props) {
       setUser(null);
     }
   }
+
+  // 同步外部 auth 状态（如 App.tsx 处理完 Watcha callback 后 setAuthUser）
+  useEffect(() => {
+    if (!currentUser) {
+      setUserState(null);
+      setWatchaUserState(null);
+      return;
+    }
+    if (isLoggedIn()) {
+      setUserState(currentUser);
+      setWatchaUserState(null);
+    } else if (isWatchaLoggedIn()) {
+      setWatchaUserState(getStoredWatchaUser());
+      setUserState(currentUser);
+    }
+  }, [currentUser]);
+
   const [config, setConfig] = useState<AuthPublicConfig | null>(null);
   const [mode, setMode] = useState<Mode>('login');
   const [loading, setLoading] = useState(false);
@@ -275,7 +293,7 @@ export default function AuthPanel({ onAuthChange }: Props) {
 
         {isWatcha && (
           <div className="text-[10px] text-jade/80 border border-jade/20 rounded p-2">
-            已通过观猹登录 · 平台 AI 功能可用
+            已通过观猹登录 · 请在设置页配置自备 API Key 使用 AI
           </div>
         )}
 

@@ -23,9 +23,10 @@ import {
 interface Props {
   onClose: () => void;
   onAuthChange?: (user: import('../lib/auth').AuthUser | null) => void;
+  authUser?: import('../lib/auth').AuthUser | null;
 }
 
-export default function Settings({ onClose, onAuthChange }: Props) {
+export default function Settings({ onClose, onAuthChange, authUser }: Props) {
   const [config, setConfig] = useState<AIConfig>(loadAIConfig());
   const [saved, setSaved] = useState(false);
   const [testing, setTesting] = useState(false);
@@ -176,6 +177,7 @@ export default function Settings({ onClose, onAuthChange }: Props) {
             <span className="text-[10px] text-gold/40">CF Auth · alunapi.top</span>
           </div>
           <AuthPanel
+            currentUser={authUser}
             onAuthChange={(u) => {
               setLoggedIn(!!u);
               onAuthChange?.(u);

@@ -22,7 +22,7 @@ import {
   getStoredUser,
   type AuthUser,
 } from './lib/auth';
-import { applyLoginAIDefaults } from './lib/aiInterpret';
+import { loadAIConfig, saveAIConfig, hasAIKey, applyLoginAIDefaults } from './lib/aiInterpret';
 import {
   handleWatchaCallback,
   getStoredWatchaUser,
@@ -113,7 +113,16 @@ export default function App() {
         try {
           const redirectUri = sessionStorage.getItem('watcha:redirect_uri') || `${window.location.origin}${window.location.pathname}`;
           const session = await handleWatchaCallback(watchaCode, watchaState, redirectUri);
-          applyLoginAIDefaults({ force: true });
+          // 观猹登录：清除 CF Auth 确保互斥
+          localStorage.removeItem('mingpan:auth-token');
+          localStorage.removeItem('mingpan:auth-user');
+          // 观猹登录：不强制切 platform，保留 BYOK（自备 Key）模式
+          const c = loadAIConfig();
+          saveAIConfig({
+            ...c,
+            enabled: hasAIKey(c),
+            accessMode: 'byok',
+          });
           setAuthUser({
             id: String(session.user.user_id),
             username: session.user.nickname,
@@ -365,7 +374,7 @@ export default function App() {
         )}
 
         {tab === 'settings' && (
-          <Settings onClose={() => setTab(birth ? 'ziwei' : 'home')} onAuthChange={setAuthUser} />
+          <Settings onClose={() => setTab(birth ? 'ziwei' : 'home')} onAuthChange={setAuthUser} authUser={authUser} />
         )}
       </main>
 
