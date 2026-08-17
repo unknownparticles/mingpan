@@ -250,8 +250,8 @@ export default function AuthPanel({ onAuthChange }: Props) {
       points: 0,
       createdAt: '',
       lastLoginAt: null,
-    } : null);
-    const m = displayUser?.membership;
+    } : null) as AuthUser;
+    const m = displayUser.membership;
     return (
       <div className="space-y-3">
         <div className="flex items-center gap-3">
