@@ -1,7 +1,5 @@
 import { useEffect, useState } from 'react';
 import {
-  buildExternalLoginUrl,
-  buildOAuthStartUrl,
   fetchAuthConfig,
   fetchMe,
   getStoredUser,
@@ -16,6 +14,7 @@ import {
   applyLoginAIDefaults,
   applyLogoutAIDefaults,
 } from '../lib/aiInterpret';
+import { startWatchaLogin } from '../lib/watchaAuth';
 
 type Mode = 'login' | 'register';
 
@@ -120,6 +119,18 @@ export default function AuthPanel({ onAuthChange, currentUser }: Props) {
     }
   }
 
+  async function onWatchaLogin() {
+    setLoading(true);
+    setError('');
+    sessionStorage.setItem('watcha:register_code', registerCode.trim());
+    try {
+      await startWatchaLogin(`${window.location.origin}${window.location.pathname}`);
+    } catch (err: any) {
+      setError(err?.message || '无法发起观猹授权');
+      setLoading(false);
+    }
+  }
+
   async function onLogout() {
     setLoading(true);
     setError('');
@@ -136,8 +147,6 @@ export default function AuthPanel({ onAuthChange, currentUser }: Props) {
       setLoading(false);
     }
   }
-
-  const oauthProviders = (config?.providers || []).filter(p => p.type === 'oauth2' && p.loginUrl);
 
   if (booting) {
     return (
@@ -203,6 +212,13 @@ export default function AuthPanel({ onAuthChange, currentUser }: Props) {
 
   return (
     <div className="space-y-3">
+      <button
+        onClick={onWatchaLogin}
+        disabled={loading}
+        className="w-full flex items-center justify-center gap-2.5 bg-emerald-900/30 border border-emerald-600/40 text-emerald-300 hover:bg-emerald-900/50 hover:text-emerald-200 text-sm py-2.5 rounded transition disabled:opacity-40"
+      >
+        <span className="title-display tracking-widest">观猹登录</span>
+      </button>
 
       <div className="flex gap-2">
         <button
@@ -297,30 +313,6 @@ export default function AuthPanel({ onAuthChange, currentUser }: Props) {
           </button>
         </form>
       )}
-
-      {oauthProviders.length > 0 && (
-        <div className="space-y-2 pt-1 border-t border-gold/10">
-          <div className="text-[10px] text-gold/50">第三方登录</div>
-          <div className="flex flex-wrap gap-2">
-            {oauthProviders.map(p => (
-              <a
-                key={p.name}
-                href={buildOAuthStartUrl(p.loginUrl!, mode, registerCode.trim() || undefined)}
-                className="text-xs px-2.5 py-1 rounded btn-ghost"
-              >
-                {p.displayName}
-              </a>
-            ))}
-          </div>
-        </div>
-      )}
-
-      <div className="text-[10px] text-gold/40 leading-relaxed">
-        也可前往登录站：
-        <a className="text-gold underline ml-1" href={buildExternalLoginUrl('login')} target="_blank" rel="noreferrer">
-          打开登录页
-        </a>
-      </div>
 
       {message && <div className="text-xs text-jade">{message}</div>}
       {error && <div className="text-xs text-vermilion">{error}</div>}

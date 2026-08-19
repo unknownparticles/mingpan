@@ -181,6 +181,20 @@ export async function registerWithPassword(input: {
   return session;
 }
 
+export async function completeWatchaLogin(input: {
+  code: string;
+  codeVerifier: string;
+  redirectUri: string;
+  registerCode?: string;
+}): Promise<AuthSession> {
+  const session = await api<AuthSession>('/api/auth/external/watcha', {
+    method: 'POST',
+    body: JSON.stringify(input),
+  });
+  saveSession(session);
+  return session;
+}
+
 export async function fetchMe(): Promise<{ user: AuthUser; identities: unknown[] } | null> {
   const token = getStoredToken();
   if (!token) return null;
@@ -223,22 +237,6 @@ export function consumeAuthCallbackToken(): string | null {
   } catch {
     return null;
   }
-}
-
-export function buildExternalLoginUrl(mode: 'login' | 'register' = 'login'): string {
-  const base = mode === 'register' ? getRegisterBaseUrl() : getLoginBaseUrl();
-  const u = new URL(base.endsWith('/') ? base : `${base}/`);
-  u.searchParams.set('returnTo', window.location.href.split('#')[0]);
-  return u.toString();
-}
-
-export function buildOAuthStartUrl(providerLoginUrl: string, mode: 'login' | 'register' = 'login', registerCode?: string): string {
-  const base = mode === 'register' ? getRegisterBaseUrl() : getLoginBaseUrl();
-  const u = new URL(providerLoginUrl, base);
-  u.searchParams.set('mode', mode);
-  u.searchParams.set('returnTo', window.location.href.split('#')[0]);
-  if (registerCode) u.searchParams.set('registerCode', registerCode);
-  return u.toString();
 }
 
 export function isLoggedIn(): boolean {

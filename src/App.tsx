@@ -23,6 +23,7 @@ import {
   type AuthUser,
 } from './lib/auth';
 import { applyLoginAIDefaults } from './lib/aiInterpret';
+import { handleWatchaCallback } from './lib/watchaAuth';
 
 type Tab = 'ziwei' | 'qimen' | 'bazi' | 'overall' | 'tools' | 'form' | 'home' | 'divination' | 'settings';
 
@@ -59,6 +60,27 @@ export default function App() {
         if (!cancelled) setAuthUser(me?.user || getStoredUser());
       } catch {
         if (!cancelled) setAuthUser(getStoredUser());
+      }
+      const params = new URLSearchParams(window.location.search);
+      const code = params.get('code');
+      const state = params.get('state');
+      if (code && state) {
+        try {
+          const session = await handleWatchaCallback(
+            code,
+            state,
+            `${window.location.origin}${window.location.pathname}`,
+            sessionStorage.getItem('watcha:register_code') || undefined,
+          );
+          applyLoginAIDefaults({ force: true });
+          if (!cancelled) setAuthUser(session.user);
+          const url = new URL(window.location.href);
+          url.searchParams.delete('code');
+          url.searchParams.delete('state');
+          window.history.replaceState(null, '', url.toString());
+        } catch (e: any) {
+          console.error('Watcha login failed:', e?.message);
+        }
       }
     })();
     return () => { cancelled = true; };
