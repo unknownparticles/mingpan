@@ -20,6 +20,7 @@ import {
   consumeAuthCallbackToken,
   fetchMe,
   getStoredUser,
+  type AuthSession,
   type AuthUser,
 } from './lib/auth';
 import { applyLoginAIDefaults } from './lib/aiInterpret';
@@ -35,6 +36,35 @@ const NAV_ITEMS: { key: Tab; label: string; sub: string; icon: React.ReactNode }
   { key: 'overall', label: '综合', sub: '详批', icon: <Spark size={18} /> },
   { key: 'tools', label: '工具', sub: '九用', icon: <Wrench size={18} /> },
 ];
+
+let watchaCallbackPromise: Promise<AuthSession> | null | undefined;
+
+function consumeWatchaCallback(): Promise<AuthSession> | null {
+  if (watchaCallbackPromise !== undefined) return watchaCallbackPromise;
+
+  const url = new URL(window.location.href);
+  const code = url.searchParams.get('code');
+  const state = url.searchParams.get('state');
+  if (!code || !state) {
+    watchaCallbackPromise = null;
+    return null;
+  }
+
+  url.searchParams.delete('code');
+  url.searchParams.delete('state');
+  window.history.replaceState(null, '', url.toString());
+
+  watchaCallbackPromise = handleWatchaCallback(
+    code,
+    state,
+    `${window.location.origin}${window.location.pathname}`,
+    sessionStorage.getItem('watcha:register_code') || undefined,
+  ).then((session) => {
+    sessionStorage.removeItem('watcha:register_code');
+    return session;
+  });
+  return watchaCallbackPromise;
+}
 
 export default function App() {
   const [tab, setTab] = useState<Tab>('home');
@@ -52,7 +82,19 @@ export default function App() {
 
   useEffect(() => {
     let cancelled = false;
+    const watchaLogin = consumeWatchaCallback();
     (async () => {
+      if (watchaLogin) {
+        try {
+          const session = await watchaLogin;
+          applyLoginAIDefaults({ force: true });
+          if (!cancelled) setAuthUser(session.user);
+        } catch (e: any) {
+          console.error('Watcha login failed:', e?.message);
+        }
+        return;
+      }
+
       try {
         await consumeAuthCallbackToken();
         const me = await fetchMe();
@@ -60,27 +102,6 @@ export default function App() {
         if (!cancelled) setAuthUser(me?.user || getStoredUser());
       } catch {
         if (!cancelled) setAuthUser(getStoredUser());
-      }
-      const params = new URLSearchParams(window.location.search);
-      const code = params.get('code');
-      const state = params.get('state');
-      if (code && state) {
-        try {
-          const session = await handleWatchaCallback(
-            code,
-            state,
-            `${window.location.origin}${window.location.pathname}`,
-            sessionStorage.getItem('watcha:register_code') || undefined,
-          );
-          applyLoginAIDefaults({ force: true });
-          if (!cancelled) setAuthUser(session.user);
-          const url = new URL(window.location.href);
-          url.searchParams.delete('code');
-          url.searchParams.delete('state');
-          window.history.replaceState(null, '', url.toString());
-        } catch (e: any) {
-          console.error('Watcha login failed:', e?.message);
-        }
       }
     })();
     return () => { cancelled = true; };
