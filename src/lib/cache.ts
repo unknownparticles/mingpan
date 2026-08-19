@@ -1,6 +1,5 @@
 // AI 回答本地缓存：以 (birthKey + question) 为 key，结果存 localStorage
 import { callLLM, type AIConfig, type CallLLMOptions } from './aiInterpret';
-import { deductPoints } from './points';
 
 const CACHE_KEY = 'mingpan:ai-cache';
 const MAX_ENTRIES = 100;
@@ -98,10 +97,7 @@ export function clearAllCache() {
 }
 
 // 带缓存的 LLM 调用
-export interface CallLLMWithCacheOptions extends CallLLMOptions {
-  /** 点数扣减后的回调 */
-  onPointsDeducted?: (info: { cost: number; left: number; success: boolean }) => void;
-}
+export type CallLLMWithCacheOptions = CallLLMOptions;
 
 export async function callLLMWithCache(
   config: AIConfig,
@@ -123,14 +119,6 @@ export async function callLLMWithCache(
   }
 
   const text = await callLLM(config, messages, systemPrompt, options);
-
-  // 非缓存命中才扣点数
-  const result = deductPoints(mode);
-  options?.onPointsDeducted?.(result);
-
-  if (!result.success) {
-    // 点数不足已在 UI 层提示，此处仍返回结果（后端接入后会真正拦截）
-  }
 
   setCached(cacheKey, {
     question,
