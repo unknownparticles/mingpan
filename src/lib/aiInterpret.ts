@@ -4,7 +4,6 @@
 
 import { isLoggedIn } from './auth';
 import { callCfAiChat, getAiBaseUrl } from './cfAi';
-import { isWatchaLoggedIn } from './watchaAuth';
 
 const STORAGE_KEY = 'mingpan:ai-config';
 const PLATFORM_FAIL_KEY = 'mingpan:ai-platform-fail';
@@ -283,18 +282,18 @@ export function usesPlatformAI(config?: AIConfig): boolean {
 export function canUseAI(config?: AIConfig): boolean {
   const c = config || loadAIConfig();
   if (!c.enabled) return false;
-  if (c.accessMode === 'platform') return isLoggedIn() || isWatchaLoggedIn();
+  if (c.accessMode === 'platform') return isLoggedIn();
   return hasAIKey(c);
 }
 
 export function getAIGateMessage(config?: AIConfig): string {
   const c = config || loadAIConfig();
   if (!c.enabled) {
-    return (isLoggedIn() || isWatchaLoggedIn())
+    return isLoggedIn()
       ? '⚠️ AI 未启用，请到「设」中开启 AI 解读。'
       : '⚠️ 未登录时需在「设」中填写 API Key 并启用 AI 解读。';
   }
-  if (c.accessMode === 'platform' && !isLoggedIn() && !isWatchaLoggedIn()) {
+  if (c.accessMode === 'platform' && !isLoggedIn()) {
     return '⚠️ 平台 AI 需先登录；也可在「设」切换为自备 API Key。';
   }
   if (c.accessMode !== 'platform' && !hasAIKey(c)) {

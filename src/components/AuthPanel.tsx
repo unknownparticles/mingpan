@@ -16,15 +16,6 @@ import {
   applyLoginAIDefaults,
   applyLogoutAIDefaults,
 } from '../lib/aiInterpret';
-import {
-  getStoredWatchaUser,
-  isWatchaLoggedIn,
-  logoutWatcha,
-  clearWatchaSession,
-  startWatchaLogin,
-  type WatchaUserInfo,
-} from '../lib/watchaAuth';
-import { loadAIConfig, saveAIConfig, hasAIKey, canUseAI } from '../lib/aiInterpret';
 
 type Mode = 'login' | 'register';
 
@@ -33,58 +24,20 @@ interface Props {
   currentUser?: AuthUser | null;
 }
 
-const watchaLogoUrl = `${import.meta.env.BASE_URL}watcha-logo.svg`;
-
 export default function AuthPanel({ onAuthChange, currentUser }: Props) {
   const [user, setUserState] = useState<AuthUser | null>(getStoredUser());
-  const [watchaUser, setWatchaUserState] = useState(getStoredWatchaUser());
   function setUser(next: AuthUser | null) {
     setUserState(next);
-    // 互斥：设置 CF Auth 用户时清除词源数据
-    if (next) {
-      clearWatchaSession();
-      setWatchaUserState(null);
-    }
     onAuthChange?.(next);
   }
-  function setWatchaUser(next: WatchaUserInfo | null) {
-    setWatchaUserState(next);
-    // Sync to main auth state
-    if (next) {
-      // 互斥：设置词源用户时清除 CF Auth 数据
-      localStorage.removeItem('mingpan:auth-token');
-      localStorage.removeItem('mingpan:auth-user');
-      setUser({
-        id: String(next.user_id),
-        username: next.nickname,
-        email: next.email ?? null,
-        displayName: next.nickname,
-        avatarUrl: next.avatar_url ?? null,
-        status: 'active',
-        membership: { tier: 'free', name: 'free', level: 0, benefits: [], expiresAt: null, active: true, sourceTier: 'free', expired: false },
-        points: 0,
-        createdAt: '',
-        lastLoginAt: null,
-      } as AuthUser);
-    } else {
-      setUser(null);
-    }
-  }
 
-  // 同步外部 auth 状态（如 App.tsx 处理完 Watcha callback 后 setAuthUser）
+  // 同步应用启动时恢复的 CF Auth 会话。
   useEffect(() => {
     if (!currentUser) {
       setUserState(null);
-      setWatchaUserState(null);
       return;
     }
-    if (isLoggedIn()) {
-      setUserState(currentUser);
-      setWatchaUserState(null);
-    } else if (isWatchaLoggedIn()) {
-      setWatchaUserState(getStoredWatchaUser());
-      setUserState(currentUser);
-    }
+    if (isLoggedIn()) setUserState(currentUser);
   }, [currentUser]);
 
   const [config, setConfig] = useState<AuthPublicConfig | null>(null);
@@ -111,42 +64,13 @@ export default function AuthPanel({ onAuthChange, currentUser }: Props) {
         if (!cancelled) setError(e?.message || '无法连接登录服务');
       }
 
-      // 互斥：只认一个登录态
-      const cfAuth = isLoggedIn();
-      const watcha = isWatchaLoggedIn();
-
-      if (cfAuth && !watcha) {
+      if (isLoggedIn()) {
         try {
           const me = await fetchMe();
           if (me?.user) applyLoginAIDefaults();
           if (!cancelled) setUser(me?.user || null);
         } catch (e: any) {
           if (!cancelled) setError(e?.message || '会话校验失败');
-        }
-      } else if (watcha && !cfAuth) {
-        const wu = getStoredWatchaUser();
-        if (wu && !cancelled) {
-          // Watcha 登录：不强制切 platform，保留用户原有 AI 模式
-          // 如果用户有自备 Key 则可用 BYOK，否则需在设置页填写
-          const c = loadAIConfig();
-          if (!canUseAI(c)) {
-            saveAIConfig({
-              ...c,
-              enabled: hasAIKey(c),
-              accessMode: hasAIKey(c) ? 'byok' : 'byok',
-            });
-          }
-          setWatchaUser(wu);
-        }
-      } else if (cfAuth && watcha) {
-        // 两边都有：清掉 Watcha，保留 CF Auth
-        await logoutWatcha();
-        try {
-          const me = await fetchMe();
-          if (me?.user) applyLoginAIDefaults();
-          if (!cancelled) setUser(me?.user || null);
-        } catch {
-          clearWatchaSession();
         }
       }
 
@@ -161,11 +85,6 @@ export default function AuthPanel({ onAuthChange, currentUser }: Props) {
     setError('');
     setMessage('');
     try {
-      // 互斥：有词源登录态则先清除
-      if (isWatchaLoggedIn()) {
-        clearWatchaSession();
-        setWatchaUser(null);
-      }
       const session = await loginWithPassword(account.trim(), password);
       applyLoginAIDefaults({ force: true });
       setUser(session.user);
@@ -184,11 +103,6 @@ export default function AuthPanel({ onAuthChange, currentUser }: Props) {
     setError('');
     setMessage('');
     try {
-      // 互斥：有词源登录态则先清除
-      if (isWatchaLoggedIn()) {
-        clearWatchaSession();
-        setWatchaUser(null);
-      }
       const session = await registerWithPassword({
         username: username.trim(),
         email: email.trim(),
@@ -206,39 +120,15 @@ export default function AuthPanel({ onAuthChange, currentUser }: Props) {
     }
   }
 
-  async function onWatchaLogin() {
-    setLoading(true);
-    setError('');
-    setMessage('');
-    try {
-      // 互斥：有 CF Auth 登录态则先清除
-      if (isLoggedIn()) {
-        localStorage.removeItem('mingpan:auth-token');
-        localStorage.removeItem('mingpan:auth-user');
-        setUser(null);
-      }
-      // Watcha 不强制切 platform，让用户可在设置页选择自备 Key
-      const redirectUri = `${window.location.origin}${window.location.pathname}`;
-      await startWatchaLogin(redirectUri);
-    } catch (err: any) {
-      setError(err?.message || '跳转失败');
-      setLoading(false);
-    }
-  }
-
   async function onLogout() {
     setLoading(true);
     setError('');
     try {
-      if (isWatchaLoggedIn()) {
-        await logoutWatcha();
-      }
       if (isLoggedIn()) {
         await logout();
       }
       applyLogoutAIDefaults();
       setUser(null);
-      setWatchaUser(null);
       setMessage('已退出登录');
     } catch (err: any) {
       setError(err?.message || '退出失败');
@@ -255,20 +145,8 @@ export default function AuthPanel({ onAuthChange, currentUser }: Props) {
     );
   }
 
-  if (user || watchaUser) {
-    const isWatcha = isWatchaLoggedIn() && !isLoggedIn();
-    const displayUser = user || (watchaUser ? {
-      id: String(watchaUser.user_id),
-      username: watchaUser.nickname,
-      email: watchaUser.email ?? null,
-      displayName: watchaUser.nickname,
-      avatarUrl: watchaUser.avatar_url ?? null,
-      status: 'active',
-      membership: { tier: 'free', name: 'free', level: 0, benefits: [], expiresAt: null, active: true, sourceTier: 'free', expired: false },
-      points: 0,
-      createdAt: '',
-      lastLoginAt: null,
-    } : null) as AuthUser;
+  if (user) {
+    const displayUser = user;
     const m = displayUser.membership;
     return (
       <div className="space-y-3">
@@ -283,7 +161,6 @@ export default function AuthPanel({ onAuthChange, currentUser }: Props) {
           <div className="min-w-0">
             <div className="text-sm text-cream title-display tracking-widest truncate">
               {displayUser.displayName || displayUser.username}
-              {isWatcha && <img src={watchaLogoUrl} alt="观猹" className="ml-1.5 w-4 h-4 rounded-full" />}
             </div>
             <div className="text-[10px] text-gold/60 truncate">
               @{displayUser.username}{displayUser.email ? ` · ${displayUser.email}` : ''}
@@ -291,14 +168,7 @@ export default function AuthPanel({ onAuthChange, currentUser }: Props) {
           </div>
         </div>
 
-        {isWatcha && (
-          <div className="text-[10px] text-jade/80 border border-jade/20 rounded p-2">
-            已通过观猹登录 · 请在设置页配置自备 API Key 使用 AI
-          </div>
-        )}
-
-        {!isWatcha && (
-          <div className="grid grid-cols-2 gap-2">
+        <div className="grid grid-cols-2 gap-2">
             <div className="rounded border border-gold/20 bg-ink-soft/40 p-2">
               <div className="text-[10px] text-gold/50">会员等级</div>
               <div className="text-sm text-gold-bright title-display tracking-wider mt-0.5">
@@ -315,8 +185,7 @@ export default function AuthPanel({ onAuthChange, currentUser }: Props) {
               </div>
               <div className="text-[10px] text-gold/40 mt-0.5">level {m?.level ?? 0}</div>
             </div>
-          </div>
-        )}
+        </div>
 
         {message && <div className="text-xs text-jade">{message}</div>}
         {error && <div className="text-xs text-vermilion">{error}</div>}
@@ -334,17 +203,6 @@ export default function AuthPanel({ onAuthChange, currentUser }: Props) {
 
   return (
     <div className="space-y-3">
-      {/* Watcha OAuth2 登录按钮 */}
-      {!user && !watchaUser && (
-        <button
-          onClick={onWatchaLogin}
-          disabled={loading}
-          className="w-full flex items-center justify-center gap-2.5 bg-emerald-900/30 border border-emerald-600/40 text-emerald-300 hover:bg-emerald-900/50 hover:text-emerald-200 text-sm py-2.5 rounded transition disabled:opacity-40"
-        >
-          <img src={watchaLogoUrl} alt="观猹" className="w-7 h-7 rounded-full" />
-          <span className="title-display tracking-widest">观猹登录</span>
-        </button>
-      )}
 
       <div className="flex gap-2">
         <button

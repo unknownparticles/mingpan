@@ -15,10 +15,6 @@ import {
 } from '../lib/aiInterpret';
 import { isLoggedIn } from '../lib/auth';
 import { fetchCfAiConfig, fetchCfAiMe, getAiBaseUrl, type CfAiModel, type CfAiMe } from '../lib/cfAi';
-import {
-  getPointsInfo,
-  onPointsDeducted,
-} from '../lib/points';
 
 interface Props {
   onClose: () => void;
@@ -37,8 +33,6 @@ export default function Settings({ onClose, onAuthChange, authUser }: Props) {
   const [platformMe, setPlatformMe] = useState<CfAiMe | null>(null);
   const [platformHint, setPlatformHint] = useState('');
   const [platformFail, setPlatformFail] = useState(getPlatformFailInfo());
-  const [pointsInfo, setPointsInfo] = useState(getPointsInfo());
-  const [pointsFlash, setPointsFlash] = useState<{ cost: number; left: number } | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -72,26 +66,6 @@ export default function Settings({ onClose, onAuthChange, authUser }: Props) {
     return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loggedIn]);
-
-  // 每分钟刷新点数信息
-  useEffect(() => {
-    const timer = setInterval(() => setPointsInfo(getPointsInfo()), 30000);
-    return () => clearInterval(timer);
-  }, []);
-
-  // 注册点数扣减回调
-  useEffect(() => {
-    onPointsDeducted((info) => {
-      if (info.success) {
-        setPointsFlash({ cost: info.cost, left: info.left });
-        setPointsInfo(getPointsInfo());
-        setTimeout(() => setPointsFlash(null), 2000);
-      } else {
-        setPointsFlash({ cost: info.cost, left: 0 });
-        setTimeout(() => setPointsFlash(null), 3000);
-      }
-    });
-  }, []);
 
   function update<K extends keyof AIConfig>(k: K, v: AIConfig[K]) {
     setConfig(prev => ({ ...prev, [k]: v }));
@@ -182,53 +156,8 @@ export default function Settings({ onClose, onAuthChange, authUser }: Props) {
               setLoggedIn(!!u);
               onAuthChange?.(u);
               setConfig(loadAIConfig());
-              setPointsInfo(getPointsInfo());
             }}
           />
-        </section>
-
-        {/* 点数系统 */}
-        <section className="rounded border border-jade/20 bg-jade/5 p-3 space-y-2">
-          <div className="flex items-center justify-between">
-            <h3 className="text-sm text-jade title-display tracking-widest">AI 点数</h3>
-            <span className="text-[10px] text-jade/50">每日重置</span>
-          </div>
-          <div className="flex items-center gap-3">
-            <div className="flex-1">
-              <div className="text-[10px] text-jade/60">剩余点数</div>
-              <div className="flex items-baseline gap-1">
-                <span className="text-2xl text-jade font-bold title-display">{pointsInfo.left}</span>
-                <span className="text-[10px] text-jade/50">/ {pointsInfo.total}</span>
-              </div>
-              <div className="mt-1 h-1.5 bg-ink-soft rounded-full overflow-hidden">
-                <div
-                  className="h-full bg-gradient-to-r from-jade to-emerald-400 transition-all"
-                  style={{ width: `${(pointsInfo.left / pointsInfo.total) * 100}%` }}
-                />
-              </div>
-            </div>
-            <div className="text-right">
-              <div className="text-[10px] text-jade/60">当前套餐</div>
-              <div className="text-sm text-jade title-display">
-                {pointsInfo.plan === 'free' ? '免费' : pointsInfo.plan === 'vip-lite' ? 'VIP 入门' : pointsInfo.plan === 'vip-pro' ? 'VIP 进阶' : pointsInfo.plan === 'vip-ultimate' ? 'VIP 旗舰' : pointsInfo.plan}
-              </div>
-            </div>
-          </div>
-          <div className="text-[10px] text-jade/40">
-            每日 {pointsInfo.total} 点 · 已用 {pointsInfo.used} · {pointsInfo.plan === 'free' ? '免费用户每周重置' : '每日 00:00 UTC 重置'}
-            · 下次重置 {pointsInfo.resetsAt}
-          </div>
-          {pointsInfo.left <= 0 && (
-            <div className="text-xs text-vermilion border border-vermilion/30 rounded p-2">
-              点数不足，请升级套餐以获取更多额度
-            </div>
-          )}
-          {pointsFlash && (
-            <div className={`text-xs animate-pulse ${pointsFlash.left > 0 ? 'text-jade' : 'text-vermilion'}`}>
-              {pointsFlash.cost > 0 ? `-${pointsFlash.cost}` : ''} 点 · 剩余 {pointsFlash.left}
-              {pointsFlash.left <= 0 && ' · 点数不足，请升级套餐 ↑'}
-            </div>
-          )}
         </section>
 
         <div className="text-xs text-gold opacity-60 leading-relaxed">

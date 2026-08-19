@@ -22,11 +22,7 @@ import {
   getStoredUser,
   type AuthUser,
 } from './lib/auth';
-import { loadAIConfig, saveAIConfig, hasAIKey, applyLoginAIDefaults } from './lib/aiInterpret';
-import {
-  handleWatchaCallback,
-  getStoredWatchaUser,
-} from './lib/watchaAuth';
+import { applyLoginAIDefaults } from './lib/aiInterpret';
 
 type Tab = 'ziwei' | 'qimen' | 'bazi' | 'overall' | 'tools' | 'form' | 'home' | 'divination' | 'settings';
 
@@ -47,24 +43,7 @@ export default function App() {
   const [loading, setLoading] = useState<{ show: boolean; type: 'ziwei' | 'qimen' | 'bazi' }>({
     show: false, type: 'ziwei',
   });
-  const [authUser, setAuthUser] = useState<AuthUser | null>(() => {
-    const wu = getStoredWatchaUser();
-    if (wu) {
-      return {
-        id: String(wu.user_id),
-        username: wu.nickname,
-        email: wu.email ?? null,
-        displayName: wu.nickname,
-        avatarUrl: wu.avatar_url ?? null,
-        status: 'active',
-        membership: { tier: 'free', name: 'free', level: 0, benefits: [], expiresAt: null, active: true, sourceTier: 'free', expired: false },
-        points: 0,
-        createdAt: '',
-        lastLoginAt: null,
-      } as AuthUser;
-    }
-    return getStoredUser();
-  });
+  const [authUser, setAuthUser] = useState<AuthUser | null>(() => getStoredUser());
 
   useEffect(() => {
     setRecords(loadRecords());
@@ -77,72 +56,9 @@ export default function App() {
         await consumeAuthCallbackToken();
         const me = await fetchMe();
         if (me?.user) applyLoginAIDefaults();
-        if (!cancelled) setAuthUser(me?.user || getStoredUser() || (getStoredWatchaUser() ? {
-          id: String(getStoredWatchaUser()!.user_id),
-          username: getStoredWatchaUser()!.nickname,
-          email: getStoredWatchaUser()!.email ?? null,
-          displayName: getStoredWatchaUser()!.nickname,
-          avatarUrl: getStoredWatchaUser()!.avatar_url ?? null,
-          status: 'active',
-          membership: { tier: 'free', name: 'free', level: 0, benefits: [], expiresAt: null, active: true, sourceTier: 'free', expired: false },
-          points: 0,
-          createdAt: '',
-          lastLoginAt: null,
-        } : null));
+        if (!cancelled) setAuthUser(me?.user || getStoredUser());
       } catch {
-        if (!cancelled) setAuthUser(getStoredUser() || (getStoredWatchaUser() ? {
-          id: String(getStoredWatchaUser()!.user_id),
-          username: getStoredWatchaUser()!.nickname,
-          email: getStoredWatchaUser()!.email ?? null,
-          displayName: getStoredWatchaUser()!.nickname,
-          avatarUrl: getStoredWatchaUser()!.avatar_url ?? null,
-          status: 'active',
-          membership: { tier: 'free', name: 'free', level: 0, benefits: [], expiresAt: null, active: true, sourceTier: 'free', expired: false },
-          points: 0,
-          createdAt: '',
-          lastLoginAt: null,
-        } : null));
-      }
-
-      // Watcha OAuth2 callback handling
-      // Watcha 回跳带标准 OAuth2 参数: ?code=...&state=...
-      const params = new URLSearchParams(window.location.search);
-      const watchaCode = params.get('code');
-      const watchaState = params.get('state');
-      if (watchaCode && watchaState) {
-        try {
-          const redirectUri = sessionStorage.getItem('watcha:redirect_uri') || `${window.location.origin}${window.location.pathname}`;
-          const session = await handleWatchaCallback(watchaCode, watchaState, redirectUri);
-          // 观猹登录：清除 CF Auth 确保互斥
-          localStorage.removeItem('mingpan:auth-token');
-          localStorage.removeItem('mingpan:auth-user');
-          // 观猹登录：不强制切 platform，保留 BYOK（自备 Key）模式
-          const c = loadAIConfig();
-          saveAIConfig({
-            ...c,
-            enabled: hasAIKey(c),
-            accessMode: 'byok',
-          });
-          setAuthUser({
-            id: String(session.user.user_id),
-            username: session.user.nickname,
-            email: session.user.email ?? null,
-            displayName: session.user.nickname,
-            avatarUrl: session.user.avatar_url ?? null,
-            status: 'active',
-            membership: { tier: 'free', name: 'free', level: 0, benefits: [], expiresAt: null, active: true, sourceTier: 'free', expired: false },
-            points: 0,
-            createdAt: '',
-            lastLoginAt: null,
-          } as AuthUser);
-          // Clean URL params
-          const url = new URL(window.location.href);
-          url.searchParams.delete('code');
-          url.searchParams.delete('state');
-          window.history.replaceState(null, '', url.toString());
-        } catch (e: any) {
-          console.error('Watcha login failed:', e?.message);
-        }
+        if (!cancelled) setAuthUser(getStoredUser());
       }
     })();
     return () => { cancelled = true; };
