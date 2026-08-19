@@ -12,7 +12,7 @@ import Settings from './components/Settings';
 import { InstallApp } from './components/InstallApp';
 import LoadingOverlay from './components/LoadingOverlay';
 import { BackgroundLayer, ScrollCard } from './components/Ornament';
-import { Taiji, Luopan, Bazi as BaziIcon, Spark, Gear, Seal, Wrench, Sparkle } from './components/Icon';
+import { Taiji, Luopan, Bazi as BaziIcon, Spark, Gear, Seal, Wrench, Sparkle, Close } from './components/Icon';
 import { trueSolarTimeCorrection } from './lib/lunar';
 import { loadRecords, saveRecord, deleteRecord } from './lib/store';
 import type { HistoryRecord } from './lib/store';
@@ -66,6 +66,14 @@ function consumeWatchaCallback(): Promise<AuthSession> | null {
   return watchaCallbackPromise;
 }
 
+function watchaLoginErrorMessage(error: unknown): string {
+  const message = error instanceof Error ? error.message : String(error || '未知错误');
+  if (message.includes('OAuth state 不匹配') || message.includes('PKCE verifier 丢失')) {
+    return '登录状态已过期，请重新点击观猹登录。';
+  }
+  return message;
+}
+
 export default function App() {
   const [tab, setTab] = useState<Tab>('home');
   const [divination, setDivination] = useState<{ type: 'meiHua' | 'xiaoLiuRen'; data: any; question?: string } | null>(null);
@@ -75,6 +83,7 @@ export default function App() {
     show: false, type: 'ziwei',
   });
   const [authUser, setAuthUser] = useState<AuthUser | null>(() => getStoredUser());
+  const [authError, setAuthError] = useState<string | null>(null);
 
   useEffect(() => {
     setRecords(loadRecords());
@@ -88,9 +97,16 @@ export default function App() {
         try {
           const session = await watchaLogin;
           applyLoginAIDefaults({ force: true });
-          if (!cancelled) setAuthUser(session.user);
-        } catch (e: any) {
-          console.error('Watcha login failed:', e?.message);
+          if (!cancelled) {
+            setAuthUser(session.user);
+            setAuthError(null);
+          }
+        } catch (error) {
+          if (!cancelled) {
+            const message = watchaLoginErrorMessage(error);
+            console.error('Watcha login failed:', message);
+            setAuthError(message);
+          }
         }
         return;
       }
@@ -230,6 +246,38 @@ export default function App() {
           </button>
         </div>
       </header>
+
+      {authError && (
+        <div
+          role="alert"
+          aria-live="assertive"
+          className="mb-3 flex items-center gap-3 border border-vermilion/50 bg-ink-soft/95 px-3 py-2.5 shadow-lg"
+        >
+          <div className="min-w-0 flex-1">
+            <div className="text-xs font-semibold text-vermilion">观猹登录失败</div>
+            <div className="mt-0.5 text-[11px] leading-relaxed text-cream/80">{authError}</div>
+          </div>
+          <button
+            type="button"
+            onClick={() => {
+              setAuthError(null);
+              setTab('settings');
+            }}
+            className="shrink-0 border border-gold/40 px-2.5 py-1.5 text-[10px] text-gold hover:border-gold hover:text-gold-bright"
+          >
+            重新登录
+          </button>
+          <button
+            type="button"
+            onClick={() => setAuthError(null)}
+            className="shrink-0 p-1 text-cream/50 hover:text-cream"
+            title="关闭提示"
+            aria-label="关闭登录失败提示"
+          >
+            <Close size={15} />
+          </button>
+        </div>
+      )}
 
       {/* 生辰速览卡（有 birth 才显示） */}
       {birth && tab !== 'settings' && tab !== 'form' && (
