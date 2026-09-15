@@ -1,29 +1,13 @@
 // 观猹授权在浏览器完成，CF Auth API 负责建立统一平台会话。
 
 import { completeWatchaLogin, type AuthSession } from './auth';
+import { createPKCEChallenge, randomString } from './pkce';
 
 const WATCHA_AUTH_BASE = 'https://watcha.cn/oauth';
 
-function randomString(len = 32): string {
-  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
-  const arr = new Uint8Array(len);
-  crypto.getRandomValues(arr);
-  return Array.from(arr, b => chars[b % chars.length]).join('');
-}
-
-async function sha256Base64(plain: string): Promise<string> {
-  const encoder = new TextEncoder();
-  const data = encoder.encode(plain);
-  const hash = await crypto.subtle.digest('SHA-256', data);
-  return btoa(String.fromCharCode(...new Uint8Array(hash)));
-}
-
 async function generatePKCE(): Promise<{ verifier: string; challenge: string }> {
   const verifier = randomString(43);
-  const challenge = (await sha256Base64(verifier))
-    .replace(/\+/g, '-')
-    .replace(/\//g, '_')
-    .replace(/=+$/g, '');
+  const challenge = await createPKCEChallenge(verifier);
   return { verifier, challenge };
 }
 
