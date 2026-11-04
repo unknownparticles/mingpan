@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
-import { SHI_CHEN, trueSolarTimeCorrection } from '../lib/lunar';
+import { SHI_CHEN } from '../lib/lunar';
+import { resolveBirthDate } from '../lib/birthDate';
 import { CITIES, searchCities } from '../lib/cities';
 import type { HistoryRecord } from '../lib/store';
 
@@ -114,6 +115,8 @@ export default function BirthForm({ onSubmit, records, onLoadRecord, onDeleteRec
     cityName: '北京',
   });
 
+  const [error, setError] = useState('');
+
   // 城市搜索
   const [cityQuery, setCityQuery] = useState('');
   const [showCityList, setShowCityList] = useState(false);
@@ -121,9 +124,7 @@ export default function BirthForm({ onSubmit, records, onLoadRecord, onDeleteRec
 
   // 时辰和小时同步
   useEffect(() => {
-    const shichen = SHI_CHEN[form.shiChenIndex];
-    const [start] = shichen.range.split('-');
-    const h = parseInt(start.split(':')[0]);
+    const h = form.shiChenIndex * 2;
     setForm(f => ({ ...f, hour: h }));
   }, [form.shiChenIndex]);
 
@@ -139,15 +140,18 @@ export default function BirthForm({ onSubmit, records, onLoadRecord, onDeleteRec
   }
 
   function handleSubmit() {
-    let date: Date = new Date(form.year, form.month - 1, form.day, form.hour, form.minute);
-    if (form.useTrueSolar) {
-      date = trueSolarTimeCorrection(date, form.longitude);
+    try {
+      resolveBirthDate(form);
+      setError('');
+      onSubmit({ ...form });
+    } catch (error) {
+      setError(error instanceof Error ? error.message : '出生日期无效');
     }
-    onSubmit({ ...form });
   }
 
   return (
     <div className="space-y-4">
+      {error && <p role="alert" className="text-sm text-vermilion">{error}</p>}
       {onBack && (
         <button
           onClick={onBack}

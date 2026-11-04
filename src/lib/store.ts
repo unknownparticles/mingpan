@@ -10,6 +10,7 @@ export interface HistoryRecord {
   birthMinute: number;
   shiChenIndex: number;
   longitude: number;
+  useTrueSolar?: boolean;
   isLunar: boolean;
   lunarLeap: boolean;
   cityName?: string;

@@ -13,7 +13,7 @@
  * - 四化详情独立展示（主星+文昌文曲左右等辅星）
  */
 
-import { astro } from 'iztro';
+import { createZiweiAstrolabe } from './ziwei';
 import { getBazi } from './bazi';
 
 export type Dimension = 'health' | 'wealth' | 'career' | 'marriage';
@@ -461,8 +461,7 @@ export function generateKLineData(
   gender: '男' | '女',
 ): { birthYear: number; data: DataPoint[]; series: DimensionSeries[]; astrolabe: any; bazi: any } {
   const birthYear = date.getFullYear();
-  const dateStr = `${birthYear}-${date.getMonth() + 1}-${date.getDate()}`;
-  const astrolabe = astro.bySolar(dateStr, shiChenIndex, gender, false, 'zh-CN');
+  const astrolabe = createZiweiAstrolabe(date, shiChenIndex, gender);
   const bazi = getBazi(date, shiChenIndex, gender);
 
   // 每年一个节点 → 1..100 岁，便于缩放后逐点查看评分

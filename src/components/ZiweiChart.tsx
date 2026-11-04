@@ -1,8 +1,9 @@
-import { useMemo, useState, useEffect, useRef } from 'react';
-import { astro } from 'iztro';
+import { useMemo, useState, useRef } from 'react';
+import { createZiweiAstrolabe, getZiweiTransforms, palaceStars } from '../lib/ziwei';
+import { SHI_CHEN } from '../lib/lunar';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import { applyZiweiSchool, SCHOOL_NAMES, type ZiweiSchool } from '../lib/ziweiSchool';
+import { SCHOOL_NAMES, type ZiweiSchool } from '../lib/ziweiSchool';
 import { loadAIConfig, SYSTEM_PROMPT_ZIWEI, canUseAI, getAIGateMessage } from '../lib/aiInterpret';
 import { callLLMWithCache } from '../lib/cache';
 // 调用 cache 用 lib/cache
@@ -48,7 +49,7 @@ const PALACE_MEANING: Record<string, string> = {
   '父母': '父母、长辈',
 };
 
-export default function ZiweiChart({ date, shiChenIndex, gender, lunarLeap }: Props) {
+export default function ZiweiChart({ date, shiChenIndex, gender }: Props) {
   const [selectedPalace, setSelectedPalace] = useState<string>('命宫');
   const [horoScope, setHoroScope] = useState<'natal' | 'decade' | 'yearly' | 'monthly'>('natal');
   // 指定运势年/月（默认现在）
@@ -63,30 +64,14 @@ export default function ZiweiChart({ date, shiChenIndex, gender, lunarLeap }: Pr
   const [highlightIndex, setHighlightIndex] = useState<number | null>(null);
   const chartRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => {
-    applyZiweiSchool(school);
-  }, [school]);
-
-  const astrolabe = useMemo(() => {
-    const dateStr = `${date.getFullYear()}-${date.getMonth() + 1}-${date.getDate()}`;
-    return astro.bySolar(dateStr, shiChenIndex, gender, lunarLeap, 'zh-CN');
-  }, [date, shiChenIndex, gender, lunarLeap, school]);
+  const astrolabe = useMemo(() => createZiweiAstrolabe(date, shiChenIndex, gender, school),
+    [date, shiChenIndex, gender, school]);
 
   const allPalaces: AnyPalace[] = astrolabe.palaces;
-  const palaceMap = new Map<string, AnyPalace>(allPalaces.map((p: any) => [p.name, p]));
+  const palaceMap = useMemo(() => new Map<string, AnyPalace>(allPalaces.map((p: any) => [p.name, p])), [allPalaces]);
 
   // 计算四化汇总
-  const sihuaStars = useMemo(() => {
-    const list: { name: string; type: string; palace: string; star: string }[] = [];
-    astrolabe.palaces.forEach((p: any) => {
-      (p.majorStars || []).forEach((s: any) => {
-        if (s.mutagen && ['禄', '权', '科', '忌'].includes(s.mutagen)) {
-          list.push({ name: s.name, type: s.mutagen, palace: p.name, star: s.name });
-        }
-      });
-    });
-    return list;
-  }, [astrolabe]);
+  const sihuaStars = useMemo(() => getZiweiTransforms(astrolabe.palaces), [astrolabe]);
 
   // 计算运限（本年本月）
   const horoscope = useMemo(() => {
@@ -101,7 +86,7 @@ export default function ZiweiChart({ date, shiChenIndex, gender, lunarLeap }: Pr
     } catch {
       return null;
     }
-  }, [astrolabe, date, shiChenIndex, horoScope, horoYear, horoMonth]);
+  }, [astrolabe, shiChenIndex, horoScope, horoYear, horoMonth]);
 
   // 当前运势档位（用于盘面叠加）
   const currentHoro = useMemo(() => {
@@ -124,7 +109,7 @@ export default function ZiweiChart({ date, shiChenIndex, gender, lunarLeap }: Pr
           type: s.type,
           scope: s.scope,
         })),
-        flowMutagens: currentHoro.mutagen || [],
+        flowMutagens: getZiweiTransforms(allPalaces, currentHoro).filter(t => t.palace === p.name).map(t => `${t.name}化${t.type}`),
         flowName: currentHoro.name,
         flowStem: currentHoro.heavenlyStem,
         flowBranch: currentHoro.earthlyBranch,
@@ -173,7 +158,7 @@ export default function ZiweiChart({ date, shiChenIndex, gender, lunarLeap }: Pr
             <div className="paper flex flex-col items-center justify-center p-1 text-center h-full bg-gradient-to-br from-vermilion-deep/20 to-ink-soft">
               <div className="text-[10px] text-gold-bright title-display">身宫</div>
               <div className="divider-gold w-6 my-0.5" />
-              <div className="text-[9px] text-gold opacity-60">{(astrolabe as any).fiveElementsClass}</div>
+              <div className="text-[9px] text-gold opacity-60">{astrolabe.earthlyBranchOfBodyPalace}</div>
             </div>
           );
         }
@@ -181,7 +166,7 @@ export default function ZiweiChart({ date, shiChenIndex, gender, lunarLeap }: Pr
           return (
             <div className="paper flex flex-col items-center justify-center p-1 text-center h-full">
               <div className="text-[10px] text-gold-bright title-display">命主</div>
-              <div className="text-[9px] text-gold opacity-60">{(astrolabe as any).soulPalace || '—'}</div>
+              <div className="text-[9px] text-gold opacity-60">{astrolabe.soul || '—'}</div>
             </div>
           );
         }
@@ -189,7 +174,7 @@ export default function ZiweiChart({ date, shiChenIndex, gender, lunarLeap }: Pr
           return (
             <div className="paper flex flex-col items-center justify-center p-1 text-center h-full">
               <div className="text-[10px] text-gold-bright title-display">身主</div>
-              <div className="text-[9px] text-gold opacity-60">{(astrolabe as any).bodyPalace || '—'}</div>
+              <div className="text-[9px] text-gold opacity-60">{astrolabe.body || '—'}</div>
             </div>
           );
         }
@@ -267,7 +252,7 @@ export default function ZiweiChart({ date, shiChenIndex, gender, lunarLeap }: Pr
           <div className="mt-0.5 pt-0.5 border-t border-gold/10">
             {flowMutagens.slice(0, 2).map((m, i) => (
               <span key={`m${i}`} className="text-[8px] text-blue-300 mr-1" title={`${currentHoro?.name || '运限'}化`}>
-                {m}化
+                {m}
               </span>
             ))}
             {flowStars.slice(0, 2).map((s: any, i: number) => (
@@ -279,7 +264,7 @@ export default function ZiweiChart({ date, shiChenIndex, gender, lunarLeap }: Pr
         )}
         <div className="mt-0.5 flex flex-wrap gap-0.5">
           {[...minorStars, ...adjStars].slice(0, 3).map((s: any, i: number) => (
-            <span key={i} className="text-[8px] text-gold opacity-60">{s.name}</span>
+            <span key={i} className="text-[8px] text-gold opacity-60">{s.name}{s.mutagen ? `化${s.mutagen}` : ''}</span>
           ))}
         </div>
         {/* 三方四正标识 */}
@@ -318,27 +303,14 @@ export default function ZiweiChart({ date, shiChenIndex, gender, lunarLeap }: Pr
 官禄(${ssfz.career.name})：${(ssfz.career.majorStars || []).map((s:any)=>s.name).join('、') || '空'}` : '';
 
       // 本命/运势四化抽取
-      const scopeSource: any = currentHoro || astrolabe;
-      let muList: string[] = scopeSource.mutagen || [];
-      if (muList.length === 0 && scopeSource.palaces) {
-        for (const p of scopeSource.palaces) {
-          for (const s of (p.majorStars || [])) {
-            if (s.mutagen) muList.push(`${s.name}化${s.mutagen}`);
-          }
-        }
-      }
-      const findPalaceIn = (star: string, source: any) => {
-        for (const p of source.palaces || []) {
-          if ((p.majorStars || []).some((s: any) => s.name === star)) return p.name;
-        }
-        return '（未入 12 宫）';
-      };
-      const luName = (muList.find((x: string) => x?.endsWith?.('禄')) || '').replace('化禄', '');
-      const quanName = (muList.find((x: string) => x?.endsWith?.('权')) || '').replace('化权', '');
-      const keName = (muList.find((x: string) => x?.endsWith?.('科')) || '').replace('化科', '');
-      const jiName = (muList.find((x: string) => x?.endsWith?.('忌')) || '').replace('化忌', '');
+      const transforms = getZiweiTransforms(allPalaces, currentHoro);
+      const luName = transforms.find(t => t.type === '禄')?.name || '';
+      const quanName = transforms.find(t => t.type === '权')?.name || '';
+      const keName = transforms.find(t => t.type === '科')?.name || '';
+      const jiName = transforms.find(t => t.type === '忌')?.name || '';
+      const findPalaceIn = (star: string) => transforms.find(t => t.name === star)?.palace || '';
 
-      const prompt = `出生：${date.getFullYear()}年${date.getMonth() + 1}月${date.getDate()}日 ${shiChenIndex}时 性别${gender} 流派：${SCHOOL_NAMES[school]}
+      const prompt = `出生：${date.getFullYear()}年${date.getMonth() + 1}月${date.getDate()}日 ${SHI_CHEN[shiChenIndex].name}时 性别${gender} 流派：${SCHOOL_NAMES[school]}
 五行局：${(astrolabe as any).fiveElementsClass}
 运势档位：${horoScope === 'natal' ? '本命' : horoScope === 'decade' ? '大限' : horoScope === 'yearly' ? '流年' : '流月'}
 解读年份/月份：${horoYear}年${horoScope === 'monthly' ? `${horoMonth}月` : ''}（以浏览器可选当前时间/用户选择为准）
@@ -348,10 +320,10 @@ export default function ZiweiChart({ date, shiChenIndex, gender, lunarLeap }: Pr
 ${ssfzInfo}
 
 【${horoScope === 'natal' ? '本命' : '运势'}四化】
-- 化禄：${luName || '无'} → 落宫：${luName ? findPalaceIn(luName, scopeSource) : ''}
-- 化权：${quanName || '无'} → 落宫：${quanName ? findPalaceIn(quanName, scopeSource) : ''}
-- 化科：${keName || '无'} → 落宫：${keName ? findPalaceIn(keName, scopeSource) : ''}
-- 化忌：${jiName || '无'} → 落宫：${jiName ? findPalaceIn(jiName, scopeSource) : ''}
+- 化禄：${luName || '无'} → 落宫：${luName ? findPalaceIn(luName) : ''}
+- 化权：${quanName || '无'} → 落宫：${quanName ? findPalaceIn(quanName) : ''}
+- 化科：${keName || '无'} → 落宫：${keName ? findPalaceIn(keName) : ''}
+- 化忌：${jiName || '无'} → 落宫：${jiName ? findPalaceIn(jiName) : ''}
 
 【四化核心含义（你必须按这个解释去写，不能偏离）】
 - 化禄 = 加强、增加资源、让事情更容易得到。
@@ -384,16 +356,16 @@ ${ssfzInfo}
 ====
 
 # 五、${horoScope === 'natal' ? '本命' : '运势'}四化对${selectedPalace}宫的独立影响
-## 化禄（${luName || '无'}）入${luName ? findPalaceIn(luName, scopeSource) : ''}
+## 化禄（${luName || '无'}）入${luName ? findPalaceIn(luName) : ''}
 [150字：体现“资源增强”。如果该化落宫与本${selectedPalace}宫形成三合/对照关系，说明对该${selectedPalace}宫所主事务的增益]
 
-## 化权（${quanName || '无'}）入${quanName ? findPalaceIn(quanName, scopeSource) : ''}
+## 化权（${quanName || '无'}）入${quanName ? findPalaceIn(quanName) : ''}
 [150字：体现“掌控与推动”。说明该化赋予本${selectedPalace}宫主人的主动权/行动力]
 
-## 化科（${keName || '无'}）入${keName ? findPalaceIn(keName, scopeSource) : ''}
+## 化科（${keName || '无'}）入${keName ? findPalaceIn(keName) : ''}
 [150字：体现“被看见与被认可”。说明该化为本${selectedPalace}宫主人带来的名声/贵人/化解]
 
-## 化忌（${jiName || '无'}）入${jiName ? findPalaceIn(jiName, scopeSource) : ''}
+## 化忌（${jiName || '无'}）入${jiName ? findPalaceIn(jiName) : ''}
 [200字：体现“课题/缺口/需调整”。说明该化为本${selectedPalace}宫带来的压力/执着/需补足之处]
 
 ====
@@ -401,14 +373,11 @@ ${ssfzInfo}
 # 六、综合建议
 [150字以内：给出具体可行的行动建议]
 
-# 四、官禄宫（${ssfz?.career.name}）事业
-[200字以内：官禄宫对${selectedPalace}宫的事业层面影响]
-
-请严格按上述4段输出，段间用 ==== 分隔。`;
+请严格按上述六段输出，段间用 ==== 分隔。`;
 
       // 缓存 key：生辰 + 宫位 + 运限档位
       const birthKey = {
-        date: `${date.getFullYear()}-${date.getMonth() + 1}-${date.getDate()}`,
+        date: astrolabe.solarDate,
         shiChen: shiChenIndex,
         gender,
       };
@@ -418,7 +387,7 @@ ${ssfzInfo}
         [{ role: 'user', content: prompt }],
         birthKey,
         cacheQ,
-        'ziwei-ssfz',
+        'ziwei-ssfz-v2',
         SYSTEM_PROMPT_ZIWEI,
       );
       const textStr = typeof text === 'string' ? text : (text as any)?.text || JSON.stringify(text);
@@ -464,8 +433,8 @@ ${ssfzInfo}
                 // 运势档位变化时，让选中宫位跳到该档"命宫"对应的本命宫位
                 if (t.v !== 'natal') {
                   try {
-                    const yr = t.v === 'yearly' || t.v === 'monthly' ? horoYear : new Date().getFullYear();
-                    const mo = t.v === 'monthly' ? horoMonth : 6;
+                    const yr = horoYear;
+                    const mo = horoMonth;
                     const targetDate = new Date(yr, mo - 1, 15, 12, 0, 0);
                     const h = (astrolabe as any).horoscope(targetDate, shiChenIndex);
                     const slot = t.v === 'decade' ? h.decadal : t.v === 'yearly' ? h.yearly : h.monthly;
@@ -821,14 +790,14 @@ ${ssfzInfo}
                 try {
                   const text = await callLLMWithCache(
                     config,
-                    [{ role: 'user', content: buildOverallPrompt(currentHoro || astrolabe, horoScope, horoYear, horoMonth) }],
+                    [{ role: 'user', content: buildOverallPrompt(astrolabe, currentHoro, horoScope, horoYear, horoMonth) }],
                     {
                       date: `${date.getFullYear()}-${date.getMonth()+1}-${date.getDate()}-${date.getHours()}-${date.getMinutes()}`,
                       shiChen: shiChenIndex,
                       gender,
                     },
-                    `overall-${horoScope}-${horoYear}-${horoMonth}`,
-                    'ziwei-overall',
+                    `overall-${horoScope}-${horoYear}-${horoMonth}-${school}`,
+                    'ziwei-overall-v2',
                     '你是精通紫微斗数的命理师，融合大限、流年、流月四化、三方四正进行整体运势综合评估。',
                   );
                   setOverallReading(typeof text === 'string' ? text : (text as any)?.text || String(text));
@@ -872,7 +841,7 @@ ${ssfzInfo}
                      horoscope.monthly?.heavenlyStem + horoscope.monthly?.earthlyBranch}
                   </span>
                   <span className="text-gold opacity-60 ml-2">
-                    （命宫在{horoScope === 'decade' ? horoscope.decadal?.palaceNames?.[1] : horoScope === 'yearly' ? horoscope.yearly?.palaceNames?.[3] : horoscope.monthly?.palaceNames?.[10]}）
+                    （命宫落在{allPalaces[currentHoro?.palaceNames?.indexOf('命宫')]?.name || '—'}）
                   </span>
                 </div>
                 {(() => {
@@ -883,7 +852,7 @@ ${ssfzInfo}
                       <div className="flex flex-wrap gap-1.5 mt-1">
                         {h.mutagen.map((m: string, i: number) => (
                           <span key={i} className="px-1.5 py-0.5 text-[10px] rounded bg-gold/10 border border-gold/30 text-gold-bright">
-                            {m}化
+                            {m}化{['禄', '权', '科', '忌'][i]}
                           </span>
                         ))}
                       </div>
@@ -1010,25 +979,16 @@ function OverallScorePanel({ horo, horoScope, astrolabe, year, month }: { horo: 
     const res: { key: string; label: string; score: number; reason: string }[] = [];
 
     // 1. 四化因素（运限自带四化按吉凶加权）
-    const mu = horo.mutagen || [];
+    const transforms = getZiweiTransforms(astrolabe.palaces, horo);
     const muMap: Record<string, number> = { '禄': 8, '权': 7, '科': 6, '忌': 3 };
-    const muReason: string[] = [];
-    mu.forEach((m: string) => {
-      const known = ['禄', '权', '科', '忌'].find(k => m.includes(k));
-      if (known && muMap[known]) {
-        muReason.push(`${m}化${known}`);
-      }
-    });
-    const muScore = mu.length > 0 ? Math.round(mu.reduce((s: number, m: string) => {
-      const k = ['禄', '权', '科', '忌'].find(x => m.includes(x));
-      return s + (k ? muMap[k] : 5);
-    }, 0) / mu.length) : 6;
-    res.push({ key: 'mutagen', label: '运限四化', score: muScore, reason: muReason.join('、') || '无明显四化' });
+    const muScore = transforms.length ? Math.round(transforms.reduce((sum, t) => sum + muMap[t.type], 0) / transforms.length) : 6;
+    res.push({ key: 'mutagen', label: '运限四化', score: muScore,
+      reason: transforms.map(t => `${t.name}化${t.type}在${t.palace}`).join('、') || '无明显四化' });
 
     // 2. 本命四化（基于本命主星四化落宫）
     const natalSiHua: string[] = [];
     astrolabe.palaces.forEach((p: any) => {
-      (p.majorStars || []).forEach((s: any) => {
+      palaceStars(p).forEach((s: any) => {
         if (s.mutagen) natalSiHua.push(`${s.name}化${s.mutagen}在${p.name}`);
       });
     });
@@ -1152,42 +1112,21 @@ function OverallReadingButton({ loading, result, onRead }: { loading: boolean; r
 }
 
 // ============= 整体解读 prompt 构造 =============
-function buildOverallPrompt(horo: any, horoScope: string, year: number, month: number): string {
-  // 适配本命：horo.mutagen 不存在时，从 astrolabe 12 宫主星取本命四化
-  let mu: string[] = horo.mutagen || [];
-  if (mu.length === 0 && horo.palaces) {
-    // 本命四化：遍历 12 宫主星取 mutagen 字段
-    for (const p of horo.palaces) {
-      for (const s of (p.majorStars || [])) {
-        if (s.mutagen) mu.push(`${s.name}化${s.mutagen}`);
-      }
-    }
-  }
-  const isNatal = horoScope === 'natal' || !horoScope;
-  const scopeLabel = isNatal ? '本命' : (horoScope === 'decade' ? '大限' : horoScope === 'yearly' ? '流年' : '流月');
-  const periodLabel = isNatal ? '本命命盘' :
-                      horoScope === 'decade' ? `${year || ''}大限` :
-                      horoScope === 'yearly' ? `${year}年` :
-                      `${year}年${month}月`;
-
-  // 划分四化（禄权科忌顺序）
-  const lu = mu.find((x: string) => x?.endsWith?.('禄')) || '';
-  const quan = mu.find((x: string) => x?.endsWith?.('权')) || '';
-  const ke = mu.find((x: string) => x?.endsWith?.('科')) || '';
-  const ji = mu.find((x: string) => x?.endsWith?.('忌')) || '';
-
-  // 查找本宫位置（不信任 LLM 自行推断，直接从数据中捞）
-  const findInHoro = (star: string) => {
-    for (const p of horo.palaces || []) {
-      if (p.majorStars?.some((s: any) => s.name === star)) return p.name;
-    }
-    return '（未入 12 宫）';
-  };
-
-  const luPalace = lu ? findInHoro(lu.replace('化禄', '')) : '';
-  const quanPalace = quan ? findInHoro(quan.replace('化权', '')) : '';
-  const kePalace = ke ? findInHoro(ke.replace('化科', '')) : '';
-  const jiPalace = ji ? findInHoro(ji.replace('化忌', '')) : '';
+function buildOverallPrompt(astrolabe: any, scope: any, horoScope: string, year: number, month: number): string {
+  const horo = scope || { heavenlyStem: astrolabe.rawDates.chineseDate.yearly[0], earthlyBranch: astrolabe.rawDates.chineseDate.yearly[1] };
+  const transforms = getZiweiTransforms(astrolabe.palaces, scope);
+  const transform = (type: string) => transforms.find(t => t.type === type);
+  const lu = transform('禄')?.name || '';
+  const quan = transform('权')?.name || '';
+  const ke = transform('科')?.name || '';
+  const ji = transform('忌')?.name || '';
+  const luPalace = transform('禄')?.palace || '';
+  const quanPalace = transform('权')?.palace || '';
+  const kePalace = transform('科')?.palace || '';
+  const jiPalace = transform('忌')?.palace || '';
+  const isNatal = horoScope === 'natal';
+  const scopeLabel = isNatal ? '本命' : horoScope === 'decade' ? '大限' : horoScope === 'yearly' ? '流年' : '流月';
+  const periodLabel = isNatal ? '本命命盘' : horoScope === 'monthly' ? `${year}年${month}月` : `${year}年${scopeLabel}`;
 
   return `你是一位精通紫微斗数${scopeLabel}运势的命理师。
 
@@ -1208,7 +1147,7 @@ function buildOverallPrompt(horo: any, horoScope: string, year: number, month: n
 
 四化并无绝对好坏，关键看落在哪颗星、哪个宫、命盘整体结构如何配合。
 
-请按以下 7 段输出，段间用 ==== 分隔，**每段独立**，不要混着说：
+请按以下五段输出，段间用 ==== 分隔，**每段独立**，不要混着说：
 
 ====
 

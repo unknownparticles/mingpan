@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import BirthForm from './components/BirthForm';
 import type { BirthInput } from './components/BirthForm';
 import { HeroLanding } from './components/HeroLanding';
@@ -13,7 +13,7 @@ import { InstallApp } from './components/InstallApp';
 import LoadingOverlay from './components/LoadingOverlay';
 import { BackgroundLayer, ScrollCard } from './components/Ornament';
 import { Taiji, Luopan, Bazi as BaziIcon, Spark, Gear, Seal, Wrench, Sparkle, Close } from './components/Icon';
-import { trueSolarTimeCorrection } from './lib/lunar';
+import { resolveBirthDate } from './lib/birthDate';
 import { loadRecords, saveRecord, deleteRecord } from './lib/store';
 import type { HistoryRecord } from './lib/store';
 import {
@@ -83,6 +83,7 @@ export default function App() {
     show: false, type: 'ziwei',
   });
   const [authUser, setAuthUser] = useState<AuthUser | null>(() => getStoredUser());
+  const [birthError, setBirthError] = useState('');
   const [authError, setAuthError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -138,6 +139,7 @@ export default function App() {
         birthMinute: data.minute,
         shiChenIndex: data.shiChenIndex,
         longitude: data.longitude,
+        useTrueSolar: data.useTrueSolar,
         isLunar: data.isLunar,
         lunarLeap: data.lunarLeap,
         cityName: data.cityName,
@@ -151,7 +153,7 @@ export default function App() {
   }
 
   function handleLoadRecord(r: HistoryRecord) {
-    setBirth({
+    const input: BirthInput = {
       name: r.name,
       gender: r.gender,
       year: r.birthYear,
@@ -161,11 +163,19 @@ export default function App() {
       minute: r.birthMinute,
       shiChenIndex: r.shiChenIndex,
       longitude: r.longitude,
-      useTrueSolar: false,
+      useTrueSolar: r.useTrueSolar ?? false,
       isLunar: r.isLunar,
       lunarLeap: r.lunarLeap,
       cityName: (r as any).cityName || '',
-    });
+    };
+    try {
+      resolveBirthDate(input);
+      setBirthError('');
+      setBirth(input);
+    } catch (error) {
+      setBirthError(error instanceof Error ? error.message : '历史记录日期无效');
+      return;
+    }
     setTab('ziwei');
   }
 
@@ -174,13 +184,7 @@ export default function App() {
     setRecords(loadRecords());
   }
 
-  function buildDate(b: BirthInput): Date {
-    let d = new Date(b.year, b.month - 1, b.day, b.hour, b.minute);
-    if (b.useTrueSolar) {
-      d = trueSolarTimeCorrection(d, b.longitude);
-    }
-    return d;
-  }
+  const resolvedBirth = useMemo(() => birth ? resolveBirthDate(birth) : null, [birth]);
 
   function switchTab(t: Tab) {
     if (!birth) { setTab(t); return; }
@@ -308,6 +312,7 @@ export default function App() {
       )}
 
       <main className={`flex-1 ${tab === 'settings' ? 'app-main-no-nav' : 'app-main'}`}>
+        {birthError && <p role="alert" className="text-sm text-vermilion">{birthError}</p>}
         {tab === 'form' && (
           <BirthForm
             onSubmit={handleSubmit}
@@ -341,8 +346,8 @@ export default function App() {
 
         {tab === 'ziwei' && birth && (
           <ZiweiChart
-            date={buildDate(birth)}
-            shiChenIndex={birth.shiChenIndex}
+            date={resolvedBirth!.date}
+            shiChenIndex={resolvedBirth!.shiChenIndex}
             gender={birth.gender}
             isLunar={birth.isLunar}
             lunarLeap={birth.lunarLeap}
@@ -351,31 +356,31 @@ export default function App() {
 
         {tab === 'qimen' && birth && (
           <QimenChart
-            date={buildDate(birth)}
-            shiChenIndex={birth.shiChenIndex}
+            date={resolvedBirth!.date}
+            shiChenIndex={resolvedBirth!.shiChenIndex}
           />
         )}
 
         {tab === 'bazi' && birth && (
           <BaziChart
-            date={buildDate(birth)}
-            shiChenIndex={birth.shiChenIndex}
+            date={resolvedBirth!.date}
+            shiChenIndex={resolvedBirth!.shiChenIndex}
             gender={birth.gender}
           />
         )}
 
         {tab === 'overall' && birth && (
           <OverallAnalysis
-            date={buildDate(birth)}
-            shiChenIndex={birth.shiChenIndex}
+            date={resolvedBirth!.date}
+            shiChenIndex={resolvedBirth!.shiChenIndex}
             gender={birth.gender}
           />
         )}
 
         {tab === 'tools' && birth && (
           <ToolSquare
-            date={buildDate(birth)}
-            shiChenIndex={birth.shiChenIndex}
+            date={resolvedBirth!.date}
+            shiChenIndex={resolvedBirth!.shiChenIndex}
             gender={birth.gender}
           />
         )}

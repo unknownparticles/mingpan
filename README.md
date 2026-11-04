@@ -124,3 +124,15 @@ window.__MINGPAN_CONFIG__ = {
 
 构建时会把 secret 写入 `public/runtime-config.js`。静态托管下密钥对访问者可见，建议使用短期、低额度 Key。
 
+
+## 紫微排盘引擎
+
+引入 [Renhuai123/ziwei-doushu](https://github.com/Renhuai123/ziwei-doushu) 的 MIT 排盘核心及校正表，源码固定版本与本地适配说明见 [引擎来源](src/vendor/ziwei-doushu/README.md)。无需访问外部服务即可离线排盘。
+
+- 三合派默认采用全书亮度表、农历正月初一换年、闰月前后半月分界。
+- 中州派采用 iztro 中州算法及上游中州亮度表。
+- 天纪派采用上游闰月归下月口径；原先仅有名称、无实际算法的飞星派选项已移除。
+- 农历输入先转公历；出生地经度校正后重新计算日期与时辰。三合/中州晚子时按次日排盘，天纪晚子时按当日排盘。
+- 紫微十二宫和人生曲线共用引擎，四化同时覆盖主星与辅星。
+
+运行验证：`npm test`、`npm run build`、`npm run lint`。
