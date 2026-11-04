@@ -28,7 +28,8 @@ test('拒绝不存在的公历日期、闰月与时辰', () => {
 test('经度校正同步跨日与时辰', () => {
   const result = resolveBirthDate({ ...base, hour: 0, shiChenIndex: 0, longitude: 90, useTrueSolar: true });
   assert.deepEqual(ymd(result.date), [2024, 2, 9]);
-  assert.equal(result.date.getHours(), 22);
+  assert.equal(result.date.getHours(), 21);
+  assert.equal(result.date.getMinutes(), 45); // 二月均时差约负十四分钟
   assert.equal(result.shiChenIndex, 11);
 });
 

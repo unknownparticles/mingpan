@@ -1,18 +1,22 @@
 import { astro } from 'iztro';
 import { generateChart, setBrightnessSchool, resolveEffectiveLunarDate } from '../vendor/ziwei-doushu/algorithm.ts';
+import { periodForYear } from './ziweiPeriods.ts';
+import { Lunar } from 'lunar-javascript';
 import { BRANCHES } from '../vendor/ziwei-doushu/constants.ts';
-import { applyZiweiSchool, type ZiweiSchool } from './ziweiSchool.ts';
+import { applyZiweiSchool, loadZiweiRules, schoolRules, normalizeRules, type ZiweiSchool, type ZiweiRules } from './ziweiSchool.ts';
 
 /** 接入上游的星曜校正，同时保留现有界面使用的运限与三方四正接口。 */
-export function createZiweiAstrolabe(date: Date, hour: number, gender: '男' | '女', school: ZiweiSchool = 'sanhe') {
+export function createZiweiAstrolabe(date: Date, hour: number, gender: '男' | '女', options: ZiweiSchool | ZiweiRules = loadZiweiRules()) {
   if (gender !== '男' && gender !== '女') throw new RangeError('请选择有效的性别');
+  const rules = typeof options === 'string' ? schoolRules(options) : normalizeRules(options);
+  const school = rules.school;
   const chartDate = new Date(date);
-  if (hour === 0 && date.getHours() === 23 && school !== 'tianji') chartDate.setDate(chartDate.getDate() + 1);
+  if (hour === 0 && date.getHours() === 23 && rules.lateZishi === 'next-day') chartDate.setDate(chartDate.getDate() + 1);
   applyZiweiSchool(school);
-  setBrightnessSchool(school === 'zhongzhou' ? 'ZZ' : 'default');
+  setBrightnessSchool(rules.brightness);
   const birth = { year: chartDate.getFullYear(), month: chartDate.getMonth() + 1, day: chartDate.getDate(), hour,
     gender: gender === '男' ? 'male' as const : 'female' as const };
-  const leapMonth = school === 'tianji' ? 'next-month' : 'split';
+  const leapMonth = rules.leapMonth;
   const chart = generateChart(birth, { leapMonth });
   const effective = resolveEffectiveLunarDate(birth.year, birth.month, birth.day, leapMonth);
   const astrolabe = leapMonth !== 'split' && effective.rawLunarMonth < 0
@@ -43,9 +47,21 @@ export function createZiweiAstrolabe(date: Date, hour: number, gender: '男' | '
   astrolabe.horoscope = (targetDate, timeIndex) => {
     // iztro 运限仍会读取全局配置；旧命盘不能被后来创建的其他流派污染。
     applyZiweiSchool(school);
-    return horoscope(targetDate, timeIndex);
+    const result = horoscope(targetDate, timeIndex);
+    const target = targetDate ?? new Date();
+    const targetLunar = target instanceof Date ? Lunar.fromDate(target) : Lunar.fromDate(new Date(target));
+    const period = periodForYear(chart, targetLunar.getYear());
+    if (period.index === -2) {
+      const index = astrolabe.palaces.findIndex(p => p.name === period.palace);
+      // 童限不套用第一大限的宫干四化，独立显示童限命宫。
+      Object.assign(result.decadal, { index, name: '童限', palaceNames: astro.getPalaceNames(index),
+        mutagen: [], stars: [], range: [1, chart.daXians[0].startAge - 1] });
+    } else if (period.index < 0) {
+      Object.assign(result.decadal, { name: period.label, mutagen: [], stars: [], palaceNames: [] });
+    }
+    return result;
   };
-  return Object.assign(astrolabe, { soul: chart.mingZhu, body: chart.shenZhu });
+  return Object.assign(astrolabe, { soul: chart.mingZhu, body: chart.shenZhu, ziweiChart: chart, rules });
 }
 
 interface StarLike { name: string; mutagen?: string }

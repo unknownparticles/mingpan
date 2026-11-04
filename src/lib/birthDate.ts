@@ -1,9 +1,10 @@
 import { Lunar, LunarMonth } from 'lunar-javascript';
-import { hourToShiChenIndex, trueSolarTimeCorrection } from './lunar.ts';
+import { calculateTrueSolarTime, shiftGregorianDate } from '../vendor/ziwei-doushu/true-solar-time.ts';
 
-interface BirthDateInput {
+export interface BirthDateInput {
   year: number; month: number; day: number; hour: number; minute: number;
   gender: '男' | '女'; shiChenIndex: number;
+  utcOffsetMinutes?: number; daylightSaving?: boolean;
   isLunar: boolean; lunarLeap: boolean; useTrueSolar: boolean; longitude: number;
 }
 
@@ -26,10 +27,18 @@ export function resolveBirthDate(input: BirthDateInput) {
     if (date.getFullYear() !== year || date.getMonth() !== month - 1 || date.getDate() !== day)
       throw new RangeError('该公历日期不存在，请检查月份和天数');
   }
-  if (input.useTrueSolar) {
-    if (!Number.isFinite(input.longitude) || input.longitude < -180 || input.longitude > 180)
-      throw new RangeError('请输入有效的出生地经度');
-    date = trueSolarTimeCorrection(date, input.longitude);
-  }
-  return { date, shiChenIndex: hourToShiChenIndex(date.getHours()) };
+  const utcOffsetMinutes = input.utcOffsetMinutes ?? 480;
+  if (!Number.isInteger(utcOffsetMinutes) || utcOffsetMinutes < -720 || utcOffsetMinutes > 840)
+    throw new RangeError('标准时区偏移应在负十二至正十四小时之间');
+  if (input.useTrueSolar && (!Number.isFinite(input.longitude) || input.longitude < -180 || input.longitude > 180))
+    throw new RangeError('请输入有效的出生地经度');
+  const originalDate = new Date(date);
+  // 以 UTC 数字运算处理当地钟表读数，不让浏览器所在时区或历史夏令时改写输入。
+  const standard = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate(), hour, minute - (input.daylightSaving ? 60 : 0)));
+  const solar = calculateTrueSolarTime({ year: standard.getUTCFullYear(), month: standard.getUTCMonth() + 1, day: standard.getUTCDate(),
+    clockHour: standard.getUTCHours(), clockMinute: standard.getUTCMinutes(),
+    longitude: input.useTrueSolar ? input.longitude : undefined, utcOffsetMinutes });
+  const shifted = shiftGregorianDate({ year: standard.getUTCFullYear(), month: standard.getUTCMonth() + 1, day: standard.getUTCDate() }, solar.dayOffset);
+  date = new Date(shifted.year, shifted.month - 1, shifted.day, solar.hour, solar.minute, solar.second);
+  return { date, originalDate, shiChenIndex: solar.branch, correction: solar, daylightSaving: !!input.daylightSaving, utcOffsetMinutes };
 }

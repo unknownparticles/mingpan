@@ -398,3 +398,10 @@ body::after {
   padding-left: max(1rem, var(--safe-left));
 }
 
+
+/* 排盘参数与离线研习沿用纸墨色，长内容在自身区域滚动。 */
+.birth-clock { display: block; width: 100%; min-width: 0; margin-top: .4rem; padding: .6rem .65rem; min-height: 40px; color: #eee4d1; background: #1c2229; border: 1px solid #796844; border-radius: .3rem; font-size: .8rem; }
+.birth-clock:focus-visible, .learning-summary:focus-visible { outline: 2px solid #e6c878; outline-offset: 3px; }
+.learning-summary { cursor: pointer; color: #e6c878; font-size: .85rem; padding: .4rem 0; }
+.learning-entry { padding: .8rem; border: 1px solid #796844; border-radius: .3rem; overflow-wrap: anywhere; }
+.learning-note { margin-top: .55rem; color: #c8b681; font-size: .75rem; line-height: 1.75; }

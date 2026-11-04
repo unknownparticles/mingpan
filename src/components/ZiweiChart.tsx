@@ -1,15 +1,23 @@
-import { useMemo, useState, useRef } from 'react';
+import { useMemo, useState, useRef, useEffect } from 'react';
 import { createZiweiAstrolabe, getZiweiTransforms, palaceStars } from '../lib/ziwei';
 import { SHI_CHEN } from '../lib/lunar';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import { SCHOOL_NAMES, type ZiweiSchool } from '../lib/ziweiSchool';
+import { rulesSummary, type ZiweiRules } from '../lib/ziweiSchool';
+import ZiweiRulesPanel from './ZiweiRulesPanel';
+import ZiweiLearning from './ZiweiLearning';
+import ZiweiShare from './ZiweiShare';
+import { periodForYear, solarDateForLunarYear } from '../lib/ziweiPeriods';
+import type { BirthInput } from './BirthForm';
 import { loadAIConfig, SYSTEM_PROMPT_ZIWEI, canUseAI, getAIGateMessage } from '../lib/aiInterpret';
 import { callLLMWithCache } from '../lib/cache';
 // 调用 cache 用 lib/cache
 import InfoPopover from './InfoPopover';
 
 interface Props {
+  birth: BirthInput;
+  rules: ZiweiRules;
+  onRulesChange: (rules: ZiweiRules) => void;
   date: Date;
   shiChenIndex: number;
   gender: '男' | '女';
@@ -49,7 +57,7 @@ const PALACE_MEANING: Record<string, string> = {
   '父母': '父母、长辈',
 };
 
-export default function ZiweiChart({ date, shiChenIndex, gender }: Props) {
+export default function ZiweiChart({ date, shiChenIndex, gender, birth, rules, onRulesChange }: Props) {
   const [selectedPalace, setSelectedPalace] = useState<string>('命宫');
   const [horoScope, setHoroScope] = useState<'natal' | 'decade' | 'yearly' | 'monthly'>('natal');
   // 指定运势年/月（默认现在）
@@ -58,14 +66,27 @@ export default function ZiweiChart({ date, shiChenIndex, gender }: Props) {
   // 整体解读状态
   const [overallReading, setOverallReading] = useState<string | null>(null);
   const [overallLoading, setOverallLoading] = useState(false);
-  const [school, setSchool] = useState<ZiweiSchool>('sanhe');
+  const school = rulesSummary(rules);
   const [aiText, setAiText] = useState<string[] | null>(null);
   const [aiLoading, setAiLoading] = useState(false);
   const [highlightIndex, setHighlightIndex] = useState<number | null>(null);
   const chartRef = useRef<HTMLDivElement>(null);
 
-  const astrolabe = useMemo(() => createZiweiAstrolabe(date, shiChenIndex, gender, school),
-    [date, shiChenIndex, gender, school]);
+  const astrolabe = useMemo(() => createZiweiAstrolabe(date, shiChenIndex, gender, rules),
+    [date, shiChenIndex, gender, rules]);
+
+  const chart = astrolabe.ziweiChart;
+  const period = periodForYear(chart, horoYear);
+  const yearMin = chart.lunarInfo.lunarYear;
+  const yearMax = yearMin + Math.max(119, ...chart.daXians.map(dx => dx.endAge - 1));
+  const requestVersion = useRef(0);
+  const overallVersion = useRef(0);
+  useEffect(() => {
+    requestVersion.current += 1;
+    overallVersion.current += 1;
+    setAiText(null); setOverallReading(null); setHighlightIndex(null);
+    setAiLoading(false); setOverallLoading(false);
+  }, [astrolabe, horoScope, horoYear, horoMonth, selectedPalace]);
 
   const allPalaces: AnyPalace[] = astrolabe.palaces;
   const palaceMap = useMemo(() => new Map<string, AnyPalace>(allPalaces.map((p: any) => [p.name, p])), [allPalaces]);
@@ -81,7 +102,7 @@ export default function ZiweiChart({ date, shiChenIndex, gender }: Props) {
       const yr = horoYear;
       const mo = horoMonth;
       // 使用该年该月 15 号中午 12 点作代表（避免跨时区问题）
-      const targetDate = new Date(yr, mo - 1, 15, 12, 0, 0);
+      const targetDate = horoScope === 'monthly' ? new Date(yr, mo - 1, 15, 12) : solarDateForLunarYear(yr);
       return (astrolabe as any).horoscope(targetDate, shiChenIndex);
     } catch {
       return null;
@@ -96,6 +117,12 @@ export default function ZiweiChart({ date, shiChenIndex, gender }: Props) {
     if (horoScope === 'monthly') return horoscope.monthly;
     return null;
   }, [horoscope, horoScope]);
+
+  useEffect(() => {
+    if (!currentHoro) { setSelectedPalace('命宫'); return; }
+    const index = currentHoro.palaceNames?.indexOf('命宫');
+    if (index >= 0 && astrolabe.palaces[index]) setSelectedPalace(astrolabe.palaces[index].name);
+  }, [astrolabe, currentHoro]);
 
   // 合并宫位：本命宫位 + 运限流耀
   const mergedPalaces = useMemo(() => {
@@ -292,6 +319,7 @@ export default function ZiweiChart({ date, shiChenIndex, gender }: Props) {
       setAiText([getAIGateMessage(config)]);
       return;
     }
+    const version = ++requestVersion.current;
     setAiLoading(true);
     setAiText(null);
     setHighlightIndex(null);
@@ -310,7 +338,7 @@ export default function ZiweiChart({ date, shiChenIndex, gender }: Props) {
       const jiName = transforms.find(t => t.type === '忌')?.name || '';
       const findPalaceIn = (star: string) => transforms.find(t => t.name === star)?.palace || '';
 
-      const prompt = `出生：${date.getFullYear()}年${date.getMonth() + 1}月${date.getDate()}日 ${SHI_CHEN[shiChenIndex].name}时 性别${gender} 流派：${SCHOOL_NAMES[school]}
+      const prompt = `出生：${date.getFullYear()}年${date.getMonth() + 1}月${date.getDate()}日 ${SHI_CHEN[shiChenIndex].name}时 性别${gender} 流派：${school}
 五行局：${(astrolabe as any).fiveElementsClass}
 运势档位：${horoScope === 'natal' ? '本命' : horoScope === 'decade' ? '大限' : horoScope === 'yearly' ? '流年' : '流月'}
 解读年份/月份：${horoYear}年${horoScope === 'monthly' ? `${horoMonth}月` : ''}（以浏览器可选当前时间/用户选择为准）
@@ -393,18 +421,20 @@ ${ssfzInfo}
       const textStr = typeof text === 'string' ? text : (text as any)?.text || JSON.stringify(text);
 
       const segments = textStr.split('====').map((s: string) => s.trim()).filter((s: string) => s);
+      if (version !== requestVersion.current) return;
       setAiText(segments);
 
       // 逐段高亮（命盘 + 解读区）
       for (let i = 0; i < segments.length; i++) {
+        if (version !== requestVersion.current) return;
         setHighlightIndex(i);
         await new Promise(r => setTimeout(r, Math.max(3000, segments[i].length * 35)));
       }
       setHighlightIndex(null);
     } catch (e: any) {
-      setAiText([`❌ ${e.message || '请求失败'}`]);
+      if (version === requestVersion.current) setAiText([`❌ ${e.message || '请求失败'}`]);
     } finally {
-      setAiLoading(false);
+      if (version === requestVersion.current) setAiLoading(false);
     }
   }
 
@@ -428,27 +458,7 @@ ${ssfzInfo}
           ]).map(t => (
             <button
               key={t.v}
-              onClick={() => {
-                setHoroScope(t.v);
-                // 运势档位变化时，让选中宫位跳到该档"命宫"对应的本命宫位
-                if (t.v !== 'natal') {
-                  try {
-                    const yr = horoYear;
-                    const mo = horoMonth;
-                    const targetDate = new Date(yr, mo - 1, 15, 12, 0, 0);
-                    const h = (astrolabe as any).horoscope(targetDate, shiChenIndex);
-                    const slot = t.v === 'decade' ? h.decadal : t.v === 'yearly' ? h.yearly : h.monthly;
-                    // 查找该档位"命宫"在 palaceNames 里的索引
-                    const idx = slot.palaceNames.indexOf('命宫');
-                    if (idx >= 0) {
-                      const target = allPalaces[idx];
-                      if (target?.name) setSelectedPalace(target.name);
-                    }
-                  } catch {}
-                } else {
-                  setSelectedPalace('命宫');
-                }
-              }}
+              onClick={() => setHoroScope(t.v)}
               className={`py-1.5 rounded text-center transition ${
                 horoScope === t.v ? 'btn-vermilion' : 'btn-ghost'
               }`}
@@ -460,14 +470,15 @@ ${ssfzInfo}
         </div>
         {/* 年月选择器 + 快捷按钮 */}
         {horoScope !== 'natal' && (
-          <div className="mt-2 flex items-center gap-2 text-xs">
+          <div className="mt-2 flex flex-wrap items-center gap-2 text-xs">
             <span className="text-gold opacity-60">查询：</span>
             <select
+              aria-label="运限查询年份"
               value={horoYear}
               onChange={e => setHoroYear(parseInt(e.target.value))}
               className="bg-ink-soft border border-gold/30 rounded px-1.5 py-0.5 text-rice focus:outline-none focus:border-gold-bright"
             >
-              {Array.from({ length: 81 }, (_, i) => 2020 + i).map(y => (
+              {Array.from({ length: Math.max(yearMax, horoYear) - Math.min(yearMin, horoYear) + 1 }, (_, i) => Math.min(yearMin, horoYear) + i).map(y => (
                 <option key={y} value={y}>{y}年</option>
               ))}
             </select>
@@ -487,29 +498,32 @@ ${ssfzInfo}
               className="text-[10px] px-2 py-0.5 btn-ghost"
             >今天</button>
             <button
-              onClick={() => setHoroYear(y => y - 1)}
+              disabled={horoYear <= yearMin} onClick={() => setHoroYear(y => Math.max(yearMin, y - 1))}
               className="text-[10px] px-2 py-0.5 btn-ghost"
             >◀ 上年</button>
             <button
-              onClick={() => setHoroYear(y => y + 1)}
+              disabled={horoYear >= yearMax} onClick={() => setHoroYear(y => Math.min(yearMax, y + 1))}
               className="text-[10px] px-2 py-0.5 btn-ghost"
             >下年 ▶</button>
           </div>
         )}
       </div>
 
-      <div className="paper p-2 flex items-center gap-2 text-xs">
-        <span className="text-gold opacity-60">流派:</span>
-        {(Object.keys(SCHOOL_NAMES) as ZiweiSchool[]).map(s => (
-          <button
-            key={s}
-            className={`px-2 py-0.5 rounded ${school === s ? 'btn-vermilion' : 'btn-ghost'}`}
-            onClick={() => setSchool(s)}
-          >
-            {SCHOOL_NAMES[s].replace(/（.+）/, '')}
-          </button>
-        ))}
+      <ZiweiRulesPanel rules={rules} onChange={onRulesChange} />
+      <div className="paper p-3 text-xs text-rice leading-relaxed">
+        <p>校正后：{date.getFullYear()}年{date.getMonth() + 1}月{date.getDate()}日 {String(date.getHours()).padStart(2, '0')}:{String(date.getMinutes()).padStart(2, '0')}</p>
+        <p>排盘日：{astrolabe.solarDate} · {SHI_CHEN[shiChenIndex].name}时 · {chart.wuxingJuName}</p>
+        <p className="text-gold">流年以农历年查询；流月按所选公历月十五日查询。</p>
+        <details className="mt-2">
+          <summary className="learning-summary">大限导航 · {period.label} · {period.age}虚岁</summary>
+          <div className="flex flex-wrap gap-2 mt-2">
+            {chart.daXians[0]?.startAge > 1 && <button className="btn-ghost px-3 py-2" onClick={() => { setHoroYear(yearMin); setHoroScope('decade'); }}>童限 · 1–{chart.daXians[0].startAge - 1}岁</button>}
+            {chart.daXians.map((dx, index) => <button key={dx.startAge} aria-pressed={period.index === index} className={`px-3 py-2 rounded ${period.index === index ? 'btn-vermilion' : 'btn-ghost'}`}
+              onClick={() => { setHoroYear(yearMin + dx.startAge - 1); setHoroScope('decade'); }}>{dx.startAge}–{dx.endAge}岁 · {dx.palaceName}</button>)}
+          </div>
+        </details>
       </div>
+      <ZiweiShare birth={birth} rules={rules} chart={chart} />
 
       {/* 命盘 + 三方四正连线层 */}
       <div className="paper p-2">
@@ -693,6 +707,8 @@ ${ssfzInfo}
       </div>
 
       {/* 选中宫位详情 */}
+      <ZiweiLearning chart={chart} palaceName={selectedPalace} />
+
       {selectedP && (
         <div className="paper p-4 space-y-3">
           <div className="flex items-center justify-between">
@@ -785,6 +801,7 @@ ${ssfzInfo}
                   setOverallReading(getAIGateMessage(config));
                   return;
                 }
+                const version = ++overallVersion.current;
                 setOverallLoading(true);
                 setOverallReading(null);
                 try {
@@ -800,11 +817,12 @@ ${ssfzInfo}
                     'ziwei-overall-v2',
                     '你是精通紫微斗数的命理师，融合大限、流年、流月四化、三方四正进行整体运势综合评估。',
                   );
+                  if (version !== overallVersion.current) return;
                   setOverallReading(typeof text === 'string' ? text : (text as any)?.text || String(text));
                 } catch (e: any) {
-                  setOverallReading(`❌ ${e.message || '请求失败'}`);
+                  if (version === overallVersion.current) setOverallReading(`❌ ${e.message || '请求失败'}`);
                 } finally {
-                  setOverallLoading(false);
+                  if (version === overallVersion.current) setOverallLoading(false);
                 }
               }}
             />
@@ -833,7 +851,7 @@ ${ssfzInfo}
               <div className="text-xs text-rice space-y-1">
                 <div>
                   <span className="text-gold opacity-60">
-                    {horoScope === 'decade' ? '大限：' : horoScope === 'yearly' ? '流年：' : '流月：'}
+                    {horoScope === 'decade' ? `${currentHoro?.name === '童限' ? '童限' : '大限'}：` : horoScope === 'yearly' ? '流年：' : '流月：'}
                   </span>
                   <span className="text-rice font-bold">
                     {horoScope === 'decade' ? horoscope.decadal?.heavenlyStem + horoscope.decadal?.earthlyBranch :
@@ -1035,7 +1053,7 @@ function OverallScorePanel({ horo, horoScope, astrolabe, year, month }: { horo: 
   return (
     <div>
       <div className="text-xs text-gold opacity-60 mb-1.5 flex items-center gap-1">
-        <span>{horoScope === 'decade' ? `${year || ''}大限` : horoScope === 'yearly' ? `${year}年` : `${year}年${month}月`} 综合评分</span>
+        <span>{horoScope === 'decade' ? `${year || ''}年${horo.name === '童限' ? '童限' : '大限'}` : horoScope === 'yearly' ? `${year}年` : `${year}年${month}月`} 综合评分</span>
         <InfoPopover
           title="综合评分怎么算？"
           content={`综合评分根据 4 个维度加权平均（10 分制）：

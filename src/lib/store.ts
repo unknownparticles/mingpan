@@ -1,3 +1,4 @@
+import type { ZiweiRules } from './ziweiSchool';
 // 简单 localStorage 包装（紫微盘对象不能直接序列化，所以存关键信息）
 export interface HistoryRecord {
   id: string;
@@ -11,6 +12,9 @@ export interface HistoryRecord {
   shiChenIndex: number;
   longitude: number;
   useTrueSolar?: boolean;
+  utcOffsetMinutes?: number;
+  daylightSaving?: boolean;
+  ziweiRules?: ZiweiRules;
   isLunar: boolean;
   lunarLeap: boolean;
   cityName?: string;

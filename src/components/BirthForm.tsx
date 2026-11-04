@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
-import { SHI_CHEN } from '../lib/lunar';
+import { SHI_CHEN, hourToShiChenIndex } from '../lib/lunar';
 import { resolveBirthDate } from '../lib/birthDate';
+import { isChinaDST } from '../vendor/ziwei-doushu/dst-cn';
 import { CITIES, searchCities } from '../lib/cities';
 import type { HistoryRecord } from '../lib/store';
 
@@ -93,6 +94,8 @@ export interface BirthInput {
   shiChenIndex: number;
   longitude: number;
   useTrueSolar: boolean;
+  utcOffsetMinutes?: number;
+  daylightSaving?: boolean;
   isLunar: boolean;
   lunarLeap: boolean;
   cityName: string;
@@ -122,11 +125,11 @@ export default function BirthForm({ onSubmit, records, onLoadRecord, onDeleteRec
   const [showCityList, setShowCityList] = useState(false);
   const cityResults = useMemo(() => searchCities(cityQuery), [cityQuery]);
 
-  // 时辰和小时同步
-  useEffect(() => {
-    const h = form.shiChenIndex * 2;
-    setForm(f => ({ ...f, hour: h }));
-  }, [form.shiChenIndex]);
+  const preview = useMemo(() => {
+    try { return resolveBirthDate(form); } catch { return null; }
+  }, [form]);
+  const dstHint = preview && (form.utcOffsetMinutes ?? 480) === 480
+    && isChinaDST(preview.originalDate.getFullYear(), preview.originalDate.getMonth() + 1, preview.originalDate.getDate());
 
   function update<K extends keyof BirthInput>(key: K, value: BirthInput[K]) {
     setForm(f => ({ ...f, [key]: value }));
@@ -266,7 +269,7 @@ export default function BirthForm({ onSubmit, records, onLoadRecord, onDeleteRec
                 className={`py-1.5 text-xs rounded transition ${
                   form.shiChenIndex === sc.index ? 'btn-vermilion' : 'btn-ghost'
                 }`}
-                onClick={() => update('shiChenIndex', sc.index)}
+                onClick={() => setForm(f => ({ ...f, shiChenIndex: sc.index, hour: sc.index * 2, minute: 0 }))}
                 title={sc.range}
               >
                 {sc.name}时
@@ -278,6 +281,25 @@ export default function BirthForm({ onSubmit, records, onLoadRecord, onDeleteRec
           </p>
         </div>
 
+        <div className="grid grid-cols-2 gap-3">
+          <label className="text-xs text-gold">出生小时（当地钟表）
+            <input aria-label="出生小时" type="number" min="0" max="23" value={form.hour} className="birth-clock"
+              onChange={e => { const hour = Number(e.target.value); setForm(f => ({ ...f, hour, shiChenIndex: hourToShiChenIndex(hour) })); }} />
+          </label>
+          <label className="text-xs text-gold">出生分钟
+            <input aria-label="出生分钟" type="number" min="0" max="59" value={form.minute} className="birth-clock" onChange={e => update('minute', Number(e.target.value))} />
+          </label>
+        </div>
+        <label className="block text-xs text-gold">出生地标准时区
+          <select aria-label="出生地标准时区" className="birth-clock" value={form.utcOffsetMinutes ?? 480} onChange={e => update('utcOffsetMinutes', Number(e.target.value))}>
+            {Array.from({ length: 105 }, (_, i) => -720 + i * 15).map(offset => <option key={offset} value={offset}>UTC{offset >= 0 ? '+' : '−'}{Math.floor(Math.abs(offset) / 60)}:{String(Math.abs(offset) % 60).padStart(2, '0')}</option>)}
+          </select>
+        </label>
+        <div className="space-y-2 text-xs text-rice">
+          {dstHint && <p className="text-gold-bright">该日期在参考夏令时表内。请核实出生地当年的实际制度；已换算为标准时的时间无需再减。</p>}
+          <label className="flex items-start gap-2"><input type="checkbox" checked={!!form.daylightSaving} onChange={e => update('daylightSaving', e.target.checked)} />
+            出生钟表使用夏令时，减去一小时（取消即可撤销）</label>
+        </div>
         {/* 真太阳时 + 城市选择 */}
         <div>
           <div className="flex items-center justify-between mb-1">
@@ -338,6 +360,14 @@ export default function BirthForm({ onSubmit, records, onLoadRecord, onDeleteRec
           )}
         </div>
 
+        {form.useTrueSolar && <label className="block text-xs text-gold">出生地经度（东经为正，西经为负）
+          <input aria-label="出生地经度" className="birth-clock" type="number" min="-180" max="180" step="0.01" value={form.longitude} onChange={e => update('longitude', Number(e.target.value))} />
+        </label>}
+        {preview && <div className="border-l-2 border-gold/40 pl-3 text-xs text-rice leading-relaxed" aria-live="polite">
+          <p>校正后：{preview.date.getFullYear()}年{preview.date.getMonth() + 1}月{preview.date.getDate()}日 {String(preview.date.getHours()).padStart(2, '0')}:{String(preview.date.getMinutes()).padStart(2, '0')} · {SHI_CHEN[preview.shiChenIndex].name}时</p>
+          {form.useTrueSolar && <p className="text-gold">经度 {preview.correction.longitudeCorrectionMinutes.toFixed(1)} 分钟 + 均时差 {preview.correction.equationOfTimeMinutes.toFixed(1)} 分钟</p>}
+          <p className="text-gold">晚子时的排盘日期以命盘中的独立规则为准。</p>
+        </div>}
         <button
           onClick={handleSubmit}
           className="btn-vermilion w-full py-3 rounded text-base font-bold tracking-widest title-display"

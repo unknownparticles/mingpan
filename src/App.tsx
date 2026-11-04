@@ -13,6 +13,8 @@ import { InstallApp } from './components/InstallApp';
 import LoadingOverlay from './components/LoadingOverlay';
 import { BackgroundLayer, ScrollCard } from './components/Ornament';
 import { Taiji, Luopan, Bazi as BaziIcon, Spark, Gear, Seal, Wrench, Sparkle, Close } from './components/Icon';
+import { loadZiweiRules, saveZiweiRules, normalizeRules, type ZiweiRules } from './lib/ziweiSchool';
+import { parseChartShareURL } from './lib/chartShare';
 import { resolveBirthDate } from './lib/birthDate';
 import { loadRecords, saveRecord, deleteRecord } from './lib/store';
 import type { HistoryRecord } from './lib/store';
@@ -79,6 +81,8 @@ export default function App() {
   const [divination, setDivination] = useState<{ type: 'meiHua' | 'xiaoLiuRen'; data: any; question?: string } | null>(null);
   const [records, setRecords] = useState<HistoryRecord[]>([]);
   const [birth, setBirth] = useState<BirthInput | null>(null);
+  const [ziweiRules, setZiweiRules] = useState<ZiweiRules>(loadZiweiRules);
+  function changeZiweiRules(rules: ZiweiRules) { setZiweiRules(rules); saveZiweiRules(rules); }
   const [loading, setLoading] = useState<{ show: boolean; type: 'ziwei' | 'qimen' | 'bazi' }>({
     show: false, type: 'ziwei',
   });
@@ -88,6 +92,15 @@ export default function App() {
 
   useEffect(() => {
     setRecords(loadRecords());
+    try {
+      const shared = parseChartShareURL(window.location.href);
+      if (shared) {
+        setBirth(shared.birth);
+        setZiweiRules(shared.rules);
+        saveZiweiRules(shared.rules);
+        setTab('ziwei');
+      }
+    } catch (error) { setBirthError(error instanceof Error ? error.message : '分享链接无效'); }
   }, []);
 
   useEffect(() => {
@@ -125,6 +138,7 @@ export default function App() {
   }, []);
 
   function handleSubmit(data: BirthInput) {
+    setBirthError('');
     setLoading({ show: true, type: 'ziwei' });
     setTimeout(() => {
       setBirth(data);
@@ -140,6 +154,9 @@ export default function App() {
         shiChenIndex: data.shiChenIndex,
         longitude: data.longitude,
         useTrueSolar: data.useTrueSolar,
+        utcOffsetMinutes: data.utcOffsetMinutes ?? 480,
+        daylightSaving: !!data.daylightSaving,
+        ziweiRules,
         isLunar: data.isLunar,
         lunarLeap: data.lunarLeap,
         cityName: data.cityName,
@@ -164,6 +181,8 @@ export default function App() {
       shiChenIndex: r.shiChenIndex,
       longitude: r.longitude,
       useTrueSolar: r.useTrueSolar ?? false,
+      utcOffsetMinutes: r.utcOffsetMinutes ?? 480,
+      daylightSaving: r.daylightSaving ?? false,
       isLunar: r.isLunar,
       lunarLeap: r.lunarLeap,
       cityName: (r as any).cityName || '',
@@ -172,6 +191,7 @@ export default function App() {
       resolveBirthDate(input);
       setBirthError('');
       setBirth(input);
+      changeZiweiRules(normalizeRules(r.ziweiRules));
     } catch (error) {
       setBirthError(error instanceof Error ? error.message : '历史记录日期无效');
       return;
@@ -346,6 +366,9 @@ export default function App() {
 
         {tab === 'ziwei' && birth && (
           <ZiweiChart
+            birth={birth}
+            rules={ziweiRules}
+            onRulesChange={changeZiweiRules}
             date={resolvedBirth!.date}
             shiChenIndex={resolvedBirth!.shiChenIndex}
             gender={birth.gender}

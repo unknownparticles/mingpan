@@ -13,8 +13,9 @@
  * - 四化详情独立展示（主星+文昌文曲左右等辅星）
  */
 
-import { createZiweiAstrolabe } from './ziwei';
-import { getBazi } from './bazi';
+import { createZiweiAstrolabe } from './ziwei.ts';
+import { periodForYear, solarDateForLunarYear } from './ziweiPeriods.ts';
+import { getBazi } from './bazi.ts';
 
 export type Dimension = 'health' | 'wealth' | 'career' | 'marriage';
 
@@ -361,7 +362,7 @@ function ageCurve(age: number, dim: Dimension): number {
 
 function getHoroscope(astrolabe: any, age: number, shiChenIndex: number, birthYear: number): any {
   // 取该虚岁对应公历年中点，避免跨年边界抖动
-  const targetDate = new Date(birthYear + age - 1, 5, 15, 12, 0, 0);
+  const targetDate = solarDateForLunarYear(birthYear + age - 1);
   try {
     return astrolabe.horoscope(targetDate, shiChenIndex);
   } catch {
@@ -389,8 +390,9 @@ function calcPoint(age: number, year: number, astrolabe: any, bazi: any, shiChen
   const ageMutagen: string[] | undefined = horoscope?.age?.mutagen;
 
   const siHua = computeSiHua(ganZhi, astrolabe, yearlyMutagen);
-  const decadeIndex = Math.max(0, Math.floor((age - 1) / 10));
-  const decadeName = decadeMingPalaceName(horoscope, astrolabe);
+  const period = periodForYear(astrolabe.ziweiChart, year);
+  const decadeIndex = period.index;
+  const decadeName = period.index === -2 ? '童限' : period.palace || decadeMingPalaceName(horoscope, astrolabe);
 
   const dims: Dimension[] = ['health', 'wealth', 'career', 'marriage'];
   const point: DataPoint = {
@@ -460,8 +462,8 @@ export function generateKLineData(
   shiChenIndex: number,
   gender: '男' | '女',
 ): { birthYear: number; data: DataPoint[]; series: DimensionSeries[]; astrolabe: any; bazi: any } {
-  const birthYear = date.getFullYear();
   const astrolabe = createZiweiAstrolabe(date, shiChenIndex, gender);
+  const birthYear = astrolabe.ziweiChart.lunarInfo.lunarYear;
   const bazi = getBazi(date, shiChenIndex, gender);
 
   // 每年一个节点 → 1..100 岁，便于缩放后逐点查看评分
@@ -533,7 +535,7 @@ export function pointToLLMContext(
 
 【点击年份】${point.year}（${point.ganZhi}年）  ${point.age} 岁
 
-【所在大限】第 ${point.decadeIndex + 1} 大限（${point.decadeName}宫）
+【所在大限】${point.decadeIndex === -2 ? '童限' : point.decadeIndex < 0 ? '超出范围' : `第 ${point.decadeIndex + 1} 大限（${point.decadeName}宫）`}
 
 # 一、流年四化（已计入四维分，此处展开落宫细节）
 ${siHuaLines.length > 0 ? siHuaLines.join('\n') : '- （该年四化未入 12 宫）'}

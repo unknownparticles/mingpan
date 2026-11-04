@@ -554,7 +554,7 @@ export function KLineAnim({
                 </span>
               </div>
               <div className="text-[9px] text-gold/50 mt-0.5">
-                大限：第 {selectedPoint.decadeIndex + 1} 步 · {selectedPoint.decadeName}宫
+                {selectedPoint.decadeIndex === -2 ? '童限' : selectedPoint.decadeIndex < 0 ? '超出大限范围' : `大限：第 ${selectedPoint.decadeIndex + 1} 步 · ${selectedPoint.decadeName}宫`}
               </div>
             </div>
             <div className="flex items-center gap-1">
